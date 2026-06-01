@@ -3,11 +3,17 @@
 	import { base } from '$app/paths';
 	import { useAuth } from '$lib/auth';
 	import { fetchLeague } from '$lib/leagues';
+	import { fetchLeaguePicks, fetchLeagueStandings } from '$lib/standings';
+	import StandingsTable from '$lib/components/league/StandingsTable.svelte';
+	import PicksGrid from '$lib/components/league/PicksGrid.svelte';
 	import type { LeagueWithRole } from '$lib/types/league';
+	import type { LeaguePick, StandingRow } from '$lib/types/standings';
 
 	const auth = useAuth();
 
 	let league = $state<LeagueWithRole | null>(null);
+	let standings = $state<StandingRow[]>([]);
+	let picks = $state<LeaguePick[]>([]);
 	let loading = $state(true);
 	let error = $state<string | null>(null);
 	let copied = $state(false);
@@ -20,9 +26,33 @@
 		if (auth.loading || !user || !id) return;
 
 		loading = true;
-		fetchLeague(id, user.id).then((result) => {
-			league = result.league;
-			error = result.error;
+		error = null;
+
+		Promise.all([
+			fetchLeague(id, user.id),
+			fetchLeagueStandings(id),
+			fetchLeaguePicks(id)
+		]).then(([leagueResult, standingsResult, picksResult]) => {
+			if (leagueResult.error || !leagueResult.league) {
+				league = null;
+				error = leagueResult.error ?? 'League not found.';
+				standings = [];
+				picks = [];
+			} else {
+				league = leagueResult.league;
+				if (standingsResult.error) {
+					error = standingsResult.error;
+					standings = [];
+				} else {
+					standings = standingsResult.standings;
+				}
+				if (picksResult.error && !error) {
+					error = picksResult.error;
+					picks = [];
+				} else if (!picksResult.error) {
+					picks = picksResult.picks;
+				}
+			}
 			loading = false;
 		});
 	});
@@ -41,7 +71,7 @@
 	}
 </script>
 
-<main class="page page-wide">
+<main class="page page-league">
 	<p class="back-link">
 		<a href="{base}/leagues">← My leagues</a>
 	</p>
@@ -68,17 +98,32 @@
 		{/if}
 
 		<section class="card">
-			<h2 class="card-title">Coming soon</h2>
-			<ul class="coming-soon">
-				<li>Weekly picks with win %</li>
-				<li>Standings &amp; tiebreaker</li>
-				<li>Commissioner tools</li>
-			</ul>
+			<h2 class="card-title">Standings</h2>
+			<p class="muted">Ranked by total points. TB = sum of picked teams' season wins (lower is better).</p>
+			{#if standings.length === 0}
+				<p class="muted">No standings yet.</p>
+			{:else}
+				<StandingsTable standings={standings} currentUserId={auth.user?.id ?? null} />
+			{/if}
+		</section>
+
+		<section class="card">
+			<h2 class="card-title">Weekly picks</h2>
+			<p class="muted">Green = win, gray = loss, amber = tie, red = missed. Badge "2" = underdog win.</p>
+			{#if picks.length === 0}
+				<p class="muted">No picks yet.</p>
+			{:else}
+				<PicksGrid {picks} {standings} />
+			{/if}
 		</section>
 	{/if}
 </main>
 
 <style>
+	.page-league {
+		max-width: 56rem;
+	}
+
 	.back-link {
 		margin: 0 0 1rem;
 		font-size: 0.9rem;
@@ -119,16 +164,5 @@
 		padding: 0.5rem 0.75rem;
 		border-radius: 8px;
 		background: rgba(94, 224, 109, 0.1);
-	}
-
-	.coming-soon {
-		margin: 0.5rem 0 0;
-		padding-left: 1.2rem;
-		color: var(--text-muted);
-		font-size: 0.9rem;
-	}
-
-	.coming-soon li {
-		margin-bottom: 0.35rem;
 	}
 </style>

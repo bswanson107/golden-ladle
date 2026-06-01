@@ -1,0 +1,35 @@
+---
+description: Backwards-compatible Supabase migration practices
+globs: supabase/migrations/**/*.sql
+alwaysApply: false
+---
+
+# Database migrations
+
+When creating or editing migrations in this project:
+
+- Prefer backwards-compatible changes so the currently deployed app keeps working until the new frontend is live.
+- Safe patterns: add nullable columns, add new tables/RPCs, add indexes, widen types.
+- Avoid breaking changes in a single step — don't drop/rename columns or change RPC signatures without a two-phase migration.
+- Order of operations:
+  - **Adding** schema/features: run migration first, then deploy frontend that uses it.
+  - **Removing** schema/features: deploy frontend that no longer uses it first, then run cleanup migration.
+- Local dev and GitHub Pages share the same Supabase project unless env vars say otherwise — migrations affect production immediately.
+- Migrations are applied manually (SQL Editor / Supabase CLI), not by the GitHub Pages deploy workflow.
+
+## Examples
+
+```sql
+-- ✅ GOOD: add nullable column; old app ignores it, new app can use it
+alter table public.picks add column notes text;
+
+-- ✅ GOOD: add new RPC; old app never calls it
+create or replace function public.create_league(...) ...
+
+-- ❌ BAD: rename column in one step — breaks deployed app until frontend ships
+alter table public.leagues rename column name to display_name;
+
+-- ✅ GOOD: two-phase rename
+-- Phase 1: add new column, backfill, keep old column
+-- Phase 2 (after deploy): drop old column
+```

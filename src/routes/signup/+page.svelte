@@ -15,7 +15,7 @@
 
 	$effect(() => {
 		if (!auth.loading && auth.user) {
-			goto('/');
+			goto(`${base}/leagues`);
 		}
 	});
 
@@ -43,7 +43,7 @@
 		}
 
 		if (data.session) {
-			goto('/');
+			goto(`${base}/leagues`);
 			return;
 		}
 

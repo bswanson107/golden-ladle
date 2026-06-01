@@ -59,7 +59,7 @@
 		const isPublic = routeId !== null && publicRoutes.has(routeId);
 
 		if (!auth.user && !isPublic) {
-			goto('/login');
+			goto(`${base}/login`);
 		}
 	});
 
@@ -67,7 +67,7 @@
 		signingOut = true;
 		await getSupabase().auth.signOut();
 		signingOut = false;
-		goto('/');
+		goto(`${base}/`);
 	}
 </script>
 

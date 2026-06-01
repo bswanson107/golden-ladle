@@ -13,7 +13,7 @@
 
 	$effect(() => {
 		if (!auth.loading && auth.user) {
-			goto('/');
+			goto(`${base}/leagues`);
 		}
 	});
 
@@ -34,7 +34,7 @@
 			return;
 		}
 
-		goto('/');
+		goto(`${base}/leagues`);
 	}
 </script>
 

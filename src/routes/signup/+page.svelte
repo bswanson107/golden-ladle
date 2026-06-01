@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import { base } from '$app/paths';
 	import { useAuth } from '$lib/auth';
 	import { getSupabase } from '$lib/supabase';
 
@@ -110,7 +111,7 @@
 		</form>
 
 		<p class="auth-footer">
-			Already have an account? <a href="/login">Sign in</a>
+			Already have an account? <a href="{base}/login">Sign in</a>
 		</p>
 	{/if}
 </main>

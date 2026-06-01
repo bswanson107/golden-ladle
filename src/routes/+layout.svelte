@@ -53,11 +53,13 @@
 	$effect(() => {
 		if (loading) return;
 
-		const path = $page.url.pathname;
-		const isPublic = publicRoutes.has(path);
+		// Use route id (e.g. "/login"), not pathname — on GitHub Pages the pathname
+		// includes the base path ("/golden-ladle/login") and would never match.
+		const routeId = $page.route.id;
+		const isPublic = routeId !== null && publicRoutes.has(routeId);
 
 		if (!auth.user && !isPublic) {
-			goto(`${base}/login`);
+			goto('/login');
 		}
 	});
 
@@ -65,7 +67,7 @@
 		signingOut = true;
 		await getSupabase().auth.signOut();
 		signingOut = false;
-		goto(`${base}/`);
+		goto('/');
 	}
 </script>
 

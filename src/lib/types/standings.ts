@@ -24,4 +24,5 @@ export type LeaguePick = {
 	is_underdog_at_pick: boolean;
 	outcome: PickOutcome;
 	points_awarded: number;
+	team_season_wins_at_pick?: number;
 };

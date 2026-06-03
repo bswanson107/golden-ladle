@@ -19,6 +19,7 @@ type PickQueryRow = {
 	is_underdog_at_pick: boolean;
 	outcome: PickOutcome;
 	points_awarded: number;
+	team_season_wins_at_pick?: number;
 	profiles: { display_name: string } | { display_name: string }[] | null;
 	nfl_teams: { abbreviation: string; name: string } | { abbreviation: string; name: string }[] | null;
 };
@@ -58,7 +59,8 @@ function mapPickRow(row: PickQueryRow): LeaguePick | null {
 		win_pct_at_pick: row.win_pct_at_pick,
 		is_underdog_at_pick: row.is_underdog_at_pick,
 		outcome: row.outcome,
-		points_awarded: row.points_awarded
+		points_awarded: row.points_awarded,
+		team_season_wins_at_pick: row.team_season_wins_at_pick ?? 0
 	};
 }
 
@@ -80,6 +82,7 @@ export async function fetchLeaguePicks(leagueId: string): Promise<{
 			is_underdog_at_pick,
 			outcome,
 			points_awarded,
+			team_season_wins_at_pick,
 			profiles ( display_name ),
 			nfl_teams ( abbreviation, name )
 		`

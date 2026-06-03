@@ -1,24 +1,165 @@
 <script lang="ts">
+	import { afterNavigate } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { base } from '$app/paths';
-	import { useAuth } from '$lib/auth';
-	import { fetchLeague } from '$lib/leagues';
-	import { fetchLeaguePicks, fetchLeagueStandings } from '$lib/standings';
+	import { useAdmin, useAuth } from '$lib/auth';
+	import { isAppAdmin } from '$lib/admin';
+	import DemoTimeTravel from '$lib/components/pick/DemoTimeTravel.svelte';
 	import StandingsTable from '$lib/components/league/StandingsTable.svelte';
 	import PicksGrid from '$lib/components/league/PicksGrid.svelte';
+	import TeamLogo from '$lib/components/TeamLogo.svelte';
+	import {
+		formatPoints,
+		getLatestScoredPick,
+		getMaxVisibleWeek,
+		loadDemoState,
+		mergeDemoLeagueView,
+		outcomeLabel,
+		resetDemoPicks,
+		saveDemoState,
+		simulatedWeekLabel
+	} from '$lib/demo';
+	import { fetchWeekGames } from '$lib/games';
+	import { adminKickLeagueMember, fetchLeague } from '$lib/leagues';
+	import { fetchLeaguePicks, fetchLeagueStandings } from '$lib/standings';
+	import type { DemoState } from '$lib/types/demo';
+	import type { WeekGame } from '$lib/types/game';
 	import type { LeagueWithRole } from '$lib/types/league';
 	import type { LeaguePick, StandingRow } from '$lib/types/standings';
 
 	const auth = useAuth();
+	const admin = useAdmin();
 
 	let league = $state<LeagueWithRole | null>(null);
 	let standings = $state<StandingRow[]>([]);
 	let picks = $state<LeaguePick[]>([]);
+	let demoState = $state<DemoState>({ enabled: false, simulatedWeek: 0, picks: {} });
+	let demoGamesByWeek = $state<Map<number, WeekGame[]>>(new Map());
 	let loading = $state(true);
 	let error = $state<string | null>(null);
 	let copied = $state(false);
+	let kickingUserId = $state<string | null>(null);
+	let kickError = $state<string | null>(null);
 
 	const leagueId = $derived($page.params.id);
+
+	const adminKickEnabled = $derived(
+		isAppAdmin(auth.user?.email) && admin.adminModeEnabled
+	);
+
+	const playerDisplayName = $derived.by(() => {
+		const user = auth.user;
+		if (!user) return 'You';
+		const fromStandings = standings.find((row) => row.user_id === user.id)?.display_name;
+		if (fromStandings) return fromStandings;
+		const meta = user.user_metadata?.display_name;
+		if (typeof meta === 'string' && meta.trim()) return meta.trim();
+		return user.email?.split('@')[0] ?? 'You';
+	});
+
+	const leagueView = $derived.by(() => {
+		const user = auth.user;
+		if (!user) {
+			return { picks, standings, maxVisibleWeek: 18 as number | null, demoActive: false };
+		}
+
+		if (!demoState.enabled) {
+			return { picks, standings, maxVisibleWeek: null, demoActive: false };
+		}
+
+		return {
+			...mergeDemoLeagueView(
+				picks,
+				standings,
+				demoState,
+				demoGamesByWeek,
+				user.id,
+				playerDisplayName
+			),
+			demoActive: true
+		};
+	});
+
+	const latestDemoPick = $derived.by(() => {
+		if (!demoState.enabled) return null;
+		return getLatestScoredPick(demoState, demoGamesByWeek);
+	});
+
+	function refreshDemoState() {
+		const user = auth.user;
+		const id = leagueId;
+		if (!user || !id) return;
+		demoState = loadDemoState(id, user.id);
+	}
+
+	function persistDemoState(next: DemoState) {
+		const user = auth.user;
+		const id = leagueId;
+		if (!user || !id) return;
+		demoState = next;
+		saveDemoState(id, user.id, next);
+	}
+
+	function handleDemoToggle(enabled: boolean) {
+		persistDemoState({ ...demoState, enabled });
+	}
+
+	function handleDemoWeekChange(simulatedWeek: number) {
+		persistDemoState({ ...demoState, simulatedWeek });
+	}
+
+	function handleResetDemo() {
+		persistDemoState(resetDemoPicks(demoState));
+	}
+
+	async function reloadLeagueData() {
+		const user = auth.user;
+		const id = leagueId;
+		if (!user || !id) return;
+
+		const [standingsResult, picksResult] = await Promise.all([
+			fetchLeagueStandings(id),
+			fetchLeaguePicks(id)
+		]);
+
+		if (standingsResult.error) {
+			error = standingsResult.error;
+			standings = [];
+		} else {
+			standings = standingsResult.standings;
+		}
+
+		if (picksResult.error && !error) {
+			error = picksResult.error;
+			picks = [];
+		} else if (!picksResult.error) {
+			picks = picksResult.picks;
+		}
+	}
+
+	async function handleKickPlayer(userId: string, displayName: string) {
+		const id = leagueId;
+		if (!id || !adminKickEnabled) return;
+
+		const confirmed = confirm(`Remove ${displayName} from this league?`);
+		if (!confirmed) return;
+
+		kickError = null;
+		kickingUserId = userId;
+
+		const result = await adminKickLeagueMember(id, userId);
+		kickingUserId = null;
+
+		if (result.error) {
+			kickError = result.error;
+			return;
+		}
+
+		standings = standings.filter((row) => row.user_id !== userId);
+		picks = picks.filter((pick) => pick.user_id !== userId);
+
+		await reloadLeagueData();
+	}
 
 	$effect(() => {
 		const user = auth.user;
@@ -38,8 +179,10 @@
 				error = leagueResult.error ?? 'League not found.';
 				standings = [];
 				picks = [];
+				demoState = { enabled: false, simulatedWeek: 0, picks: {} };
 			} else {
 				league = leagueResult.league;
+				refreshDemoState();
 				if (standingsResult.error) {
 					error = standingsResult.error;
 					standings = [];
@@ -55,6 +198,35 @@
 			}
 			loading = false;
 		});
+	});
+
+	$effect(() => {
+		const state = demoState;
+		const leagueData = league;
+		if (!state.enabled || !leagueData) {
+			demoGamesByWeek = new Map();
+			return;
+		}
+
+		const weeks = [...new Set(Object.keys(state.picks).map(Number))];
+		if (weeks.length === 0) {
+			demoGamesByWeek = new Map();
+			return;
+		}
+
+		Promise.all(weeks.map((week) => fetchWeekGames(leagueData.season_year, week))).then(
+			(results) => {
+				const next = new Map<number, WeekGame[]>();
+				weeks.forEach((week, index) => {
+					next.set(week, results[index]?.games ?? []);
+				});
+				demoGamesByWeek = next;
+			}
+		);
+	});
+
+	afterNavigate(() => {
+		refreshDemoState();
 	});
 
 	async function copyInviteCode() {
@@ -84,6 +256,38 @@
 		<h1 class="page-title">{league.name}</h1>
 		<p class="page-subtitle">{league.season_year} season</p>
 
+		<section class="card pick-cta">
+			<div class="pick-cta-row">
+				<div>
+					<h2 class="card-title">Your pick</h2>
+					<p class="muted">Choose a team for this week's games.</p>
+				</div>
+				<a href="{base}/league/{league.id}/pick" class="btn btn-primary btn-sm">Make your pick</a>
+			</div>
+			{#if demoState.enabled}
+				<p class="demo-summary">
+					Demo mode: {simulatedWeekLabel(demoState.simulatedWeek)}
+					{#if latestDemoPick}
+						<span class="demo-summary-result">
+							· Latest result:
+							<TeamLogo teamCode={latestDemoPick.team_id} size={24} />
+							{latestDemoPick.team_abbreviation}
+							({outcomeLabel(latestDemoPick.outcome)}, {formatPoints(latestDemoPick.points_awarded)} pts)
+						</span>
+					{/if}
+				</p>
+			{/if}
+		</section>
+
+		<section class="demo-travel-wrap">
+			<DemoTimeTravel
+				demoState={demoState}
+				onToggle={handleDemoToggle}
+				onWeekChange={handleDemoWeekChange}
+				onReset={handleResetDemo}
+			/>
+		</section>
+
 		{#if league.is_commissioner}
 			<section class="card">
 				<h2 class="card-title">Invite family</h2>
@@ -99,21 +303,43 @@
 
 		<section class="card">
 			<h2 class="card-title">Standings</h2>
-			<p class="muted">Ranked by total points. TB = sum of picked teams' season wins (lower is better).</p>
-			{#if standings.length === 0}
+			{#if leagueView.demoActive}
+				{@const visibleThrough = getMaxVisibleWeek(demoState.simulatedWeek)}
+				<p class="muted demo-view-note">
+					Viewing through {simulatedWeekLabel(demoState.simulatedWeek)}
+					{#if visibleThrough > 0}
+						(weeks 1–{visibleThrough} only)
+					{:else}
+						(no completed weeks yet)
+					{/if}
+				</p>
+			{:else}
+				<p class="muted">Ranked by total points. TB = sum of picked teams' season wins (lower is better).</p>
+			{/if}
+			{#if kickError}
+				<p class="auth-error" role="alert">{kickError}</p>
+			{/if}
+			{#if leagueView.standings.length === 0}
 				<p class="muted">No standings yet.</p>
 			{:else}
-				<StandingsTable standings={standings} currentUserId={auth.user?.id ?? null} />
+				<StandingsTable
+					standings={leagueView.standings}
+					currentUserId={auth.user?.id ?? null}
+					adminKickEnabled={adminKickEnabled}
+					commissionerId={league.commissioner_id}
+					{kickingUserId}
+					onKickPlayer={handleKickPlayer}
+				/>
 			{/if}
 		</section>
 
 		<section class="card">
 			<h2 class="card-title">Weekly picks</h2>
-			<p class="muted">Green = win, gray = loss, amber = tie, red = missed. Badge "2" = underdog win.</p>
-			{#if picks.length === 0}
+			<p class="muted">Green = win, gray = loss, amber = tie. Gold badge "2" = underdawg win.</p>
+			{#if leagueView.picks.length === 0}
 				<p class="muted">No picks yet.</p>
 			{:else}
-				<PicksGrid {picks} {standings} />
+				<PicksGrid picks={leagueView.picks} standings={leagueView.standings} />
 			{/if}
 		</section>
 	{/if}
@@ -164,5 +390,34 @@
 		padding: 0.5rem 0.75rem;
 		border-radius: 8px;
 		background: rgba(94, 224, 109, 0.1);
+	}
+
+	.pick-cta-row {
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: 1rem;
+	}
+
+	.demo-summary {
+		margin: 0.75rem 0 0;
+		padding-top: 0.75rem;
+		border-top: 1px solid var(--border);
+		font-size: 0.85rem;
+		color: var(--link);
+	}
+
+	.demo-summary-result {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.35rem;
+	}
+
+	.demo-view-note {
+		color: var(--link);
+	}
+
+	.demo-travel-wrap {
+		margin-top: 1.25rem;
 	}
 </style>

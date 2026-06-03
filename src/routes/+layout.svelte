@@ -7,14 +7,16 @@
 	import { base } from '$app/paths';
 	import type { Session } from '@supabase/supabase-js';
 	import favicon from '$lib/assets/favicon.svg';
-	import { AUTH_CONTEXT_KEY, type AuthStore } from '$lib/auth';
+	import { AUTH_CONTEXT_KEY, ADMIN_CONTEXT_KEY, type AuthStore, type AdminStore } from '$lib/auth';
 	import { getSupabase } from '$lib/supabase';
+	import { isAppAdmin, loadAdminMode, saveAdminMode } from '$lib/admin';
 
 	let { children } = $props();
 
 	let session = $state<Session | null>(null);
 	let loading = $state(true);
 	let signingOut = $state(false);
+	let adminModeEnabled = $state(false);
 
 	const auth: AuthStore = {
 		get session() {
@@ -28,11 +30,28 @@
 		}
 	};
 
+	const admin: AdminStore = {
+		get adminModeEnabled() {
+			return adminModeEnabled;
+		},
+		setAdminMode(enabled: boolean) {
+			adminModeEnabled = enabled;
+			saveAdminMode(enabled);
+		}
+	};
+
 	setContext(AUTH_CONTEXT_KEY, auth);
+	setContext(ADMIN_CONTEXT_KEY, admin);
+
+	const showAdminToggle = $derived(
+		!auth.loading && auth.user !== null && isAppAdmin(auth.user.email)
+	);
 
 	const publicRoutes = new Set(['/', '/login', '/signup']);
 
 	onMount(() => {
+		adminModeEnabled = loadAdminMode();
+
 		const supabase = getSupabase();
 
 		supabase.auth.getSession().then(({ data: { session: initialSession } }) => {
@@ -84,6 +103,17 @@
 				<span class="nav-muted">…</span>
 			{:else if auth.user}
 				<a href="{base}/leagues" class="nav-link">Leagues</a>
+				{#if showAdminToggle}
+					<label class="admin-toggle">
+						<input
+							type="checkbox"
+							checked={adminModeEnabled}
+							onchange={(e) =>
+								admin.setAdminMode((e.currentTarget as HTMLInputElement).checked)}
+						/>
+						<span>Admin</span>
+					</label>
+				{/if}
 				<span class="nav-user">{auth.user.email}</span>
 				<button
 					type="button"
@@ -161,6 +191,27 @@
 
 	.nav-muted {
 		color: var(--text-muted);
+	}
+
+	.admin-toggle {
+		display: flex;
+		align-items: center;
+		gap: 0.35rem;
+		font-size: 0.8rem;
+		font-weight: 600;
+		color: var(--text-muted);
+		cursor: pointer;
+		user-select: none;
+	}
+
+	.admin-toggle input {
+		width: 0.9rem;
+		height: 0.9rem;
+		accent-color: #e89898;
+	}
+
+	.admin-toggle:has(input:checked) {
+		color: #e89898;
 	}
 
 	.btn-sm {

@@ -118,6 +118,35 @@ export async function joinLeagueByInvite(
 	return { leagueId: data as string, error: null };
 }
 
+export async function adminKickLeagueMember(
+	leagueId: string,
+	userId: string
+): Promise<{ error: string | null }> {
+	const supabase = getSupabase();
+
+	const { error } = await supabase.rpc('admin_kick_league_member', {
+		p_league_id: leagueId,
+		p_user_id: userId
+	});
+
+	if (error) {
+		const missingRpc =
+			error.code === 'PGRST202' ||
+			error.message.includes('admin_kick_league_member') ||
+			error.message.includes('Could not find the function');
+
+		if (missingRpc) {
+			return {
+				error:
+					'Remove is not set up on the database yet. Run migration 006 in Supabase SQL Editor, or locally: npm run db:apply-admin-kick (requires SUPABASE_DB_URL in .env).'
+			};
+		}
+		return { error: error.message };
+	}
+
+	return { error: null };
+}
+
 export async function fetchLeague(
 	leagueId: string,
 	userId: string

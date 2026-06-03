@@ -1,4 +1,5 @@
 <script lang="ts">
+	import TeamLogo from '$lib/components/TeamLogo.svelte';
 	import type { LeaguePick, PickOutcome } from '$lib/types/standings';
 
 	let {
@@ -36,11 +37,10 @@
 			case 'win':
 				return 'win';
 			case 'loss':
+			case 'missed':
 				return 'loss';
 			case 'tie':
 				return 'tie';
-			case 'missed':
-				return 'missed';
 			default:
 				return 'pending';
 		}
@@ -65,11 +65,12 @@
 						{@const pick = player.picks.get(week)}
 						<td class="pick-cell {pick ? outcomeClass(pick.outcome) : 'empty'}">
 							{#if pick}
-								<span class="team">{pick.team_abbreviation}</span>
+								<span class="team-pick">
+									<TeamLogo teamCode={pick.team_id} size={24} tile={false} />
+									<span class="team">{pick.team_abbreviation}</span>
+								</span>
 								{#if pick.outcome === 'win' && pick.is_underdog_at_pick}
-									<span class="underdog" title="Underdog win (2 pts)">2</span>
-								{:else if pick.outcome === 'missed'}
-									<span class="missed-label" title="Missed pick">—</span>
+									<span class="underdawg" title="Underdawg win (2 pts)">2</span>
 								{/if}
 							{/if}
 						</td>
@@ -138,6 +139,13 @@
 		font-variant-numeric: tabular-nums;
 	}
 
+	.team-pick {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.25rem;
+		vertical-align: middle;
+	}
+
 	.pick-cell.win {
 		background: rgba(94, 224, 109, 0.12);
 		color: var(--accent);
@@ -156,30 +164,19 @@
 		color: #e6b800;
 	}
 
-	.pick-cell.missed {
-		background: rgba(255, 100, 100, 0.08);
-		color: #c97070;
-	}
-
 	.pick-cell.pending {
 		color: var(--text-muted);
 	}
 
-	.underdog {
+	.underdawg {
 		display: inline-block;
 		margin-left: 0.15rem;
 		font-size: 0.65rem;
 		font-weight: 700;
 		padding: 0.05rem 0.25rem;
 		border-radius: 4px;
-		background: rgba(94, 224, 109, 0.25);
-		color: var(--accent);
+		background: var(--underdog-bg);
+		color: var(--underdog);
 		vertical-align: super;
-	}
-
-	.missed-label {
-		display: block;
-		font-size: 0.65rem;
-		color: #c97070;
 	}
 </style>

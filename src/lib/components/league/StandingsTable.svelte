@@ -3,10 +3,18 @@
 
 	let {
 		standings,
-		currentUserId = null
+		currentUserId = null,
+		adminKickEnabled = false,
+		commissionerId = null,
+		kickingUserId = null,
+		onKickPlayer
 	}: {
 		standings: StandingRow[];
 		currentUserId?: string | null;
+		adminKickEnabled?: boolean;
+		commissionerId?: string | null;
+		kickingUserId?: string | null;
+		onKickPlayer?: (userId: string, displayName: string) => void;
 	} = $props();
 
 	function formatRecord(row: StandingRow): string {
@@ -14,6 +22,13 @@
 			return `${row.wins}-${row.losses}-${row.ties}`;
 		}
 		return `${row.wins}-${row.losses}`;
+	}
+
+	function canKickPlayer(row: StandingRow): boolean {
+		if (!adminKickEnabled || !onKickPlayer) return false;
+		if (currentUserId !== null && row.user_id === currentUserId) return false;
+		if (commissionerId !== null && row.user_id === commissionerId) return false;
+		return true;
 	}
 </script>
 
@@ -36,10 +51,26 @@
 				>
 					<td class="num rank">{row.standing_rank}</td>
 					<td class="name">
-						{row.display_name}
-						{#if row.standing_rank === 1}
-							<span class="crown" aria-label="Leader">👑</span>
-						{/if}
+						<span class="name-row">
+							<span class="name-text">
+								{row.display_name}
+								{#if row.standing_rank === 1}
+									<span class="crown" aria-label="Leader">👑</span>
+								{/if}
+							</span>
+							{#if canKickPlayer(row)}
+								<button
+									type="button"
+									class="kick-btn"
+									title="Remove {row.display_name} from league"
+									disabled={kickingUserId === row.user_id}
+									aria-label="Remove {row.display_name} from league"
+									onclick={() => onKickPlayer?.(row.user_id, row.display_name)}
+								>
+									{kickingUserId === row.user_id ? '…' : '×'}
+								</button>
+							{/if}
+						</span>
 					</td>
 					<td class="num points">{row.total_points.toFixed(1)}</td>
 					<td class="num">{formatRecord(row)}</td>
@@ -91,6 +122,45 @@
 		min-width: 8rem;
 	}
 
+	.name-row {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.45rem;
+	}
+
+	.name-text {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.25rem;
+	}
+
+	.kick-btn {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 1.35rem;
+		height: 1.35rem;
+		padding: 0;
+		border: 1px solid rgba(255, 100, 100, 0.4);
+		border-radius: 999px;
+		background: rgba(255, 100, 100, 0.1);
+		color: #e89898;
+		font-size: 1rem;
+		line-height: 1;
+		font-weight: 700;
+		cursor: pointer;
+	}
+
+	.kick-btn:hover:not(:disabled) {
+		background: rgba(255, 100, 100, 0.18);
+		border-color: rgba(255, 100, 100, 0.6);
+	}
+
+	.kick-btn:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+
 	.points {
 		font-weight: 700;
 		color: var(--accent);
@@ -100,7 +170,7 @@
 		color: var(--text-muted);
 	}
 
-	.leader .name {
+	.leader .name-text {
 		color: var(--accent);
 	}
 
@@ -109,6 +179,6 @@
 	}
 
 	.crown {
-		margin-left: 0.25rem;
+		margin-left: 0.1rem;
 	}
 </style>

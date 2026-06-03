@@ -12,7 +12,7 @@
 	const auth = useAuth();
 
 	let league = $state<LeagueWithRole | null>(null);
-	let demoState = $state<DemoState>({ enabled: false, simulatedWeek: 0, picks: {} });
+	let demoState = $state<DemoState>({ enabled: false, simulatedWeek: 1, picks: {} });
 	let loading = $state(true);
 	let error = $state<string | null>(null);
 

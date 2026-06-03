@@ -1,5 +1,11 @@
 <script lang="ts">
-	import { hasDemoPicks, simulatedWeekLabel } from '$lib/demo';
+	import {
+		clampSimulatedWeek,
+		hasDemoPicks,
+		MAX_SIMULATED_WEEK,
+		MIN_SIMULATED_WEEK,
+		simulatedWeekLabel
+	} from '$lib/demo';
 	import type { DemoState } from '$lib/types/demo';
 
 	let {
@@ -14,8 +20,17 @@
 		onReset?: () => void;
 	} = $props();
 
-	const weekOptions = Array.from({ length: 19 }, (_, i) => i);
+	const weekOptions = Array.from(
+		{ length: MAX_SIMULATED_WEEK - MIN_SIMULATED_WEEK + 1 },
+		(_, i) => MIN_SIMULATED_WEEK + i
+	);
 	const canReset = $derived(hasDemoPicks(demoState));
+	const canStepBack = $derived(demoState.simulatedWeek > MIN_SIMULATED_WEEK);
+	const canStepForward = $derived(demoState.simulatedWeek < MAX_SIMULATED_WEEK);
+
+	function stepWeek(delta: number) {
+		onWeekChange(clampSimulatedWeek(demoState.simulatedWeek + delta));
+	}
 </script>
 
 <section class="demo-panel">
@@ -38,17 +53,37 @@
 			Picks are saved locally and scored from mock 2025 results.
 		</p>
 
-		<label class="week-select">
-			<span>Simulated time</span>
-			<select
-				value={demoState.simulatedWeek}
-				onchange={(e) => onWeekChange(Number((e.currentTarget as HTMLSelectElement).value))}
-			>
-				{#each weekOptions as week (week)}
-					<option value={week}>{simulatedWeekLabel(week)}</option>
-				{/each}
-			</select>
-		</label>
+		<div class="week-select">
+			<span class="week-select-label">Simulated time</span>
+			<div class="week-controls">
+				<button
+					type="button"
+					class="week-step"
+					disabled={!canStepBack}
+					aria-label="Previous week"
+					onclick={() => stepWeek(-1)}
+				>
+					←
+				</button>
+				<select
+					value={demoState.simulatedWeek}
+					onchange={(e) => onWeekChange(Number((e.currentTarget as HTMLSelectElement).value))}
+				>
+					{#each weekOptions as week (week)}
+						<option value={week}>{simulatedWeekLabel(week)}</option>
+					{/each}
+				</select>
+				<button
+					type="button"
+					class="week-step"
+					disabled={!canStepForward}
+					aria-label="Next week"
+					onclick={() => stepWeek(1)}
+				>
+					→
+				</button>
+			</div>
+		</div>
 
 		{#if onReset}
 			<button type="button" class="reset-btn" disabled={!canReset} onclick={onReset}>
@@ -120,13 +155,52 @@
 		color: var(--text-muted);
 	}
 
-	.week-select select {
+	.week-select-label {
+		font-size: 0.85rem;
+	}
+
+	.week-controls {
+		display: flex;
+		align-items: center;
+		gap: 0.45rem;
+	}
+
+	.week-controls select {
+		flex: 1;
+		min-width: 0;
 		padding: 0.55rem 0.65rem;
 		border: 1px solid var(--border);
 		border-radius: 8px;
 		background: var(--bg);
 		color: var(--text);
 		font-size: 0.95rem;
+	}
+
+	.week-step {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 2.25rem;
+		height: 2.25rem;
+		padding: 0;
+		border: 1px solid var(--border);
+		border-radius: 8px;
+		background: var(--bg);
+		color: var(--text);
+		font-size: 1rem;
+		line-height: 1;
+		cursor: pointer;
+		flex-shrink: 0;
+	}
+
+	.week-step:hover:not(:disabled) {
+		border-color: var(--link);
+		color: var(--link);
+	}
+
+	.week-step:disabled {
+		opacity: 0.35;
+		cursor: not-allowed;
 	}
 
 	.reset-btn {

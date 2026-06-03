@@ -33,7 +33,7 @@
 	let league = $state<LeagueWithRole | null>(null);
 	let standings = $state<StandingRow[]>([]);
 	let picks = $state<LeaguePick[]>([]);
-	let demoState = $state<DemoState>({ enabled: false, simulatedWeek: 0, picks: {} });
+	let demoState = $state<DemoState>({ enabled: false, simulatedWeek: 1, picks: {} });
 	let demoGamesByWeek = $state<Map<number, WeekGame[]>>(new Map());
 	let loading = $state(true);
 	let error = $state<string | null>(null);
@@ -179,7 +179,7 @@
 				error = leagueResult.error ?? 'League not found.';
 				standings = [];
 				picks = [];
-				demoState = { enabled: false, simulatedWeek: 0, picks: {} };
+				demoState = { enabled: false, simulatedWeek: 1, picks: {} };
 			} else {
 				league = leagueResult.league;
 				refreshDemoState();

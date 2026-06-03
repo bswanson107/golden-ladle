@@ -11,10 +11,13 @@ export function demoStorageKey(leagueId: string, userId: string): string {
 	return `${STORAGE_PREFIX}:${leagueId}:${userId}`;
 }
 
+export const MIN_SIMULATED_WEEK = 1;
+export const MAX_SIMULATED_WEEK = 18;
+
 export function createEmptyDemoState(): DemoState {
 	return {
 		enabled: false,
-		simulatedWeek: 0,
+		simulatedWeek: MIN_SIMULATED_WEEK,
 		picks: {}
 	};
 }
@@ -28,7 +31,7 @@ export function loadDemoState(leagueId: string, userId: string): DemoState {
 		const parsed = JSON.parse(raw) as DemoState;
 		return {
 			enabled: Boolean(parsed.enabled),
-			simulatedWeek: Number(parsed.simulatedWeek) || 0,
+			simulatedWeek: clampSimulatedWeek(Number(parsed.simulatedWeek) || MIN_SIMULATED_WEEK),
 			picks: parsed.picks ?? {}
 		};
 	} catch {
@@ -52,9 +55,12 @@ export function hasDemoPicks(state: DemoState): boolean {
 	return Object.keys(state.picks).length > 0;
 }
 
+export function clampSimulatedWeek(week: number): number {
+	return Math.min(MAX_SIMULATED_WEEK, Math.max(MIN_SIMULATED_WEEK, week));
+}
+
 export function getActivePickWeek(simulatedWeek: number): number {
-	if (simulatedWeek === 0) return 1;
-	return simulatedWeek;
+	return clampSimulatedWeek(simulatedWeek);
 }
 
 export function canPickWeek(week: number, simulatedWeek: number): boolean {
@@ -139,8 +145,7 @@ export function buildDemoPick(
 }
 
 export function simulatedWeekLabel(simulatedWeek: number): string {
-	if (simulatedWeek === 0) return 'Preseason';
-	return `Week ${simulatedWeek}`;
+	return `Week ${clampSimulatedWeek(simulatedWeek)}`;
 }
 
 export function getLatestScoredPick(
@@ -191,8 +196,8 @@ export function formatWinPct(pct: number | null): string {
 
 /** Latest week whose picks/results appear on the league page while time traveling. */
 export function getMaxVisibleWeek(simulatedWeek: number): number {
-	if (simulatedWeek <= 0) return 0;
-	return simulatedWeek - 1;
+	const week = clampSimulatedWeek(simulatedWeek);
+	return Math.max(0, week - 1);
 }
 
 function recordFromPicksForStandings(

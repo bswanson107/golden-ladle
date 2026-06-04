@@ -1,4 +1,5 @@
 import { browser } from '$app/environment';
+import { isDemoSeason } from '$lib/season';
 import type { DemoPick, DemoState, ScoredDemoPick } from '$lib/types/demo';
 import type { WeekGame } from '$lib/types/game';
 import type { LeaguePick, PickOutcome, StandingRow } from '$lib/types/standings';
@@ -22,20 +23,32 @@ export function createEmptyDemoState(): DemoState {
 	};
 }
 
-export function loadDemoState(leagueId: string, userId: string): DemoState {
+export function loadDemoState(leagueId: string, userId: string, seasonYear?: number): DemoState {
 	if (!browser) return createEmptyDemoState();
 
 	try {
 		const raw = localStorage.getItem(demoStorageKey(leagueId, userId));
-		if (!raw) return createEmptyDemoState();
+		if (!raw) {
+			return seasonYear !== undefined && isDemoSeason(seasonYear)
+				? { ...createEmptyDemoState(), enabled: true }
+				: createEmptyDemoState();
+		}
 		const parsed = JSON.parse(raw) as DemoState;
-		return {
+		const state: DemoState = {
 			enabled: Boolean(parsed.enabled),
 			simulatedWeek: clampSimulatedWeek(Number(parsed.simulatedWeek) || MIN_SIMULATED_WEEK),
 			picks: parsed.picks ?? {}
 		};
+		if (seasonYear !== undefined && isDemoSeason(seasonYear)) {
+			state.enabled = true;
+		} else if (seasonYear !== undefined && !isDemoSeason(seasonYear)) {
+			state.enabled = false;
+		}
+		return state;
 	} catch {
-		return createEmptyDemoState();
+		return seasonYear !== undefined && isDemoSeason(seasonYear)
+			? { ...createEmptyDemoState(), enabled: true }
+			: createEmptyDemoState();
 	}
 }
 
@@ -128,19 +141,22 @@ export function getTeamWinPct(game: WeekGame, teamId: string): number | null {
 export function buildDemoPick(
 	game: WeekGame,
 	teamId: string,
-	threshold = DEFAULT_UNDERDOG_THRESHOLD
+	threshold = DEFAULT_UNDERDOG_THRESHOLD,
+	allowMissingWinPct = false
 ): DemoPick | null {
 	const team = teamId === game.home.id ? game.home : teamId === game.away.id ? game.away : null;
 	const winPct = getTeamWinPct(game, teamId);
-	if (!team || winPct === null) return null;
+	if (!team || (winPct === null && !allowMissingWinPct)) return null;
+
+	const effectiveWinPct = winPct ?? 50;
 
 	return {
 		game_id: game.id,
 		team_id: team.id,
 		team_abbreviation: team.abbreviation,
 		team_name: team.name,
-		win_pct_at_pick: winPct,
-		is_underdog_at_pick: isUnderdog(winPct, threshold)
+		win_pct_at_pick: effectiveWinPct,
+		is_underdog_at_pick: isUnderdog(effectiveWinPct, threshold)
 	};
 }
 

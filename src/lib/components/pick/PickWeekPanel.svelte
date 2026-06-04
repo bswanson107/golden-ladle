@@ -1,31 +1,52 @@
 <script lang="ts">
 	import GameCard from '$lib/components/pick/GameCard.svelte';
 	import TeamLogo from '$lib/components/TeamLogo.svelte';
+	import WeekNavigator from '$lib/components/pick/WeekNavigator.svelte';
 	import {
 		buildDemoPick,
 		canPickWeek,
 		formatPoints,
 		formatWinPct,
 		getActivePickWeek,
-		getUsedTeamIds,
 		outcomeLabel,
 		resultsVisibleForWeek,
 		scoreDemoPick
 	} from '$lib/demo';
+	import { teamUsageByWeek, type UserLeaguePick } from '$lib/picks';
 	import { fetchWeekGames } from '$lib/games';
 	import type { DemoPick, DemoState } from '$lib/types/demo';
 	import type { WeekGame } from '$lib/types/game';
 
+	type SavePickOptions = { clearWeek?: number };
+
 	let {
+		mode,
 		seasonYear,
-		demoState,
+		viewWeek,
+		onWeekChange,
+		weekNavLabel = 'View week',
+		showWeekReset = false,
+		canWeekReset = false,
+		onWeekReset,
+		demoState = null,
+		userPicksByWeek = new Map<number, UserLeaguePick>(),
 		underdogThreshold = 33,
+		saving = false,
 		onSavePick
 	}: {
+		mode: 'demo' | 'live';
 		seasonYear: number;
-		demoState: DemoState;
+		viewWeek: number;
+		onWeekChange: (week: number) => void;
+		weekNavLabel?: string;
+		showWeekReset?: boolean;
+		canWeekReset?: boolean;
+		onWeekReset?: () => void;
+		demoState?: DemoState | null;
+		userPicksByWeek?: Map<number, UserLeaguePick>;
 		underdogThreshold?: number;
-		onSavePick: (week: number, pick: DemoPick) => void;
+		saving?: boolean;
+		onSavePick: (week: number, pick: DemoPick, options?: SavePickOptions) => void | Promise<void>;
 	} = $props();
 
 	let games = $state<WeekGame[]>([]);
@@ -33,48 +54,149 @@
 	let loading = $state(true);
 	let error = $state<string | null>(null);
 	let pendingPick = $state<DemoPick | null>(null);
+	let reuseConfirm = $state<{ pick: DemoPick; clearWeek: number } | null>(null);
 
-	const activeWeek = $derived(getActivePickWeek(demoState.simulatedWeek));
-	const currentPick = $derived(demoState.picks[activeWeek] ?? null);
-	const usedTeamIds = $derived(getUsedTeamIds(demoState.picks));
-	const weekOpen = $derived(canPickWeek(activeWeek, demoState.simulatedWeek));
-	const pickSubmitted = $derived(currentPick !== null);
-	const pickingEnabled = $derived(weekOpen && !pickSubmitted);
-	const showResults = $derived(resultsVisibleForWeek(activeWeek, demoState.simulatedWeek));
-	const displayTeamId = $derived(
-		pickSubmitted ? (currentPick?.team_id ?? null) : (pendingPick?.team_id ?? null)
+	const activeWeek = $derived(
+		mode === 'demo' && demoState ? getActivePickWeek(demoState.simulatedWeek) : viewWeek
 	);
+
+	const demoCurrentPick = $derived(
+		mode === 'demo' && demoState ? (demoState.picks[activeWeek] ?? null) : null
+	);
+
+	const liveCurrentPick = $derived(userPicksByWeek.get(activeWeek) ?? null);
+
+	const currentPick = $derived(
+		mode === 'demo' ? demoCurrentPick : livePickToDemo(liveCurrentPick)
+	);
+
+	const weekOpen = $derived(
+		mode === 'demo' && demoState ? canPickWeek(activeWeek, demoState.simulatedWeek) : true
+	);
+
+	const pickSubmitted = $derived(mode === 'demo' ? demoCurrentPick !== null : liveCurrentPick !== null);
+
+	const canChangeLivePick = $derived.by(() => {
+		if (mode !== 'live') return true;
+		if (!liveCurrentPick) return true;
+		const game = games.find((g) => g.id === liveCurrentPick.game_id);
+		if (!game) return true;
+		return game.status === 'scheduled' && new Date(game.kickoff_at) > new Date();
+	});
+
+	const pickingEnabled = $derived(
+		mode === 'demo' ? weekOpen && !pickSubmitted : canChangeLivePick
+	);
+
+	const showResults = $derived.by(() => {
+		if (mode === 'demo' && demoState) {
+			return resultsVisibleForWeek(activeWeek, demoState.simulatedWeek);
+		}
+		if (!liveCurrentPick) return false;
+		const game = games.find((g) => g.id === liveCurrentPick.game_id);
+		return game?.status === 'final';
+	});
+
+	const displayTeamId = $derived(
+		pickSubmitted && mode === 'demo'
+			? (currentPick?.team_id ?? null)
+			: (pendingPick?.team_id ?? currentPick?.team_id ?? null)
+	);
+
+	const showSubmitButton = $derived(pickingEnabled && games.length > 0);
+
+	const usageMap = $derived.by(() => {
+		if (mode === 'demo' && demoState) {
+			const picksMap = new Map(
+				Object.entries(demoState.picks).map(([week, pick]) => [Number(week), pick])
+			);
+			return teamUsageByWeek(picksMap, activeWeek);
+		}
+		return teamUsageByWeek(userPicksByWeek, activeWeek);
+	});
 
 	const priorWeek = $derived(activeWeek > 1 ? activeWeek - 1 : null);
-	const priorPick = $derived(priorWeek !== null ? (demoState.picks[priorWeek] ?? null) : null);
-	const priorResultsVisible = $derived(
-		priorWeek !== null && resultsVisibleForWeek(priorWeek, demoState.simulatedWeek)
-	);
+
+	const priorPick = $derived.by(() => {
+		if (priorWeek === null) return null;
+		if (mode === 'demo' && demoState) return demoState.picks[priorWeek] ?? null;
+		return livePickToDemo(userPicksByWeek.get(priorWeek) ?? null);
+	});
+
+	const priorResultsVisible = $derived.by(() => {
+		if (priorWeek === null || !priorPick) return false;
+		if (mode === 'demo' && demoState) {
+			return resultsVisibleForWeek(priorWeek, demoState.simulatedWeek);
+		}
+		const livePrior = userPicksByWeek.get(priorWeek);
+		if (!livePrior) return false;
+		const game = priorWeekGames.find((g) => g.id === livePrior.game_id);
+		return game?.status === 'final';
+	});
 
 	const priorScored = $derived.by(() => {
 		if (!priorPick || !priorWeek || !priorResultsVisible) return null;
-		const game = priorWeekGames.find((g: WeekGame) => g.id === priorPick.game_id) ?? null;
-		return scoreDemoPick(priorWeek, priorPick, game, demoState.simulatedWeek);
+		if (mode === 'demo' && demoState) {
+			const game = priorWeekGames.find((g) => g.id === priorPick.game_id) ?? null;
+			return scoreDemoPick(priorWeek, priorPick, game, demoState.simulatedWeek);
+		}
+		const livePrior = userPicksByWeek.get(priorWeek);
+		if (!livePrior) return null;
+		const game = priorWeekGames.find((g) => g.id === livePrior.game_id) ?? null;
+		if (!game || game.status !== 'final') return null;
+		return livePickToScored(livePrior, game);
 	});
 
 	const currentScored = $derived.by(() => {
 		if (!currentPick || !showResults) return null;
-		const game = games.find((g: WeekGame) => g.id === currentPick.game_id) ?? null;
-		return scoreDemoPick(activeWeek, currentPick, game, demoState.simulatedWeek);
+		if (mode === 'demo' && demoState) {
+			const game = games.find((g) => g.id === currentPick.game_id) ?? null;
+			return scoreDemoPick(activeWeek, currentPick, game, demoState.simulatedWeek);
+		}
+		if (!liveCurrentPick) return null;
+		const game = games.find((g) => g.id === liveCurrentPick.game_id) ?? null;
+		if (!game || game.status !== 'final') return null;
+		return livePickToScored(liveCurrentPick, game);
 	});
+
+	function livePickToDemo(pick: UserLeaguePick | null | undefined): DemoPick | null {
+		if (!pick) return null;
+		return {
+			game_id: pick.game_id,
+			team_id: pick.team_id,
+			team_abbreviation: pick.team_abbreviation,
+			team_name: pick.team_name,
+			win_pct_at_pick: pick.win_pct_at_pick,
+			is_underdog_at_pick: pick.is_underdog_at_pick
+		};
+	}
+
+	function livePickToScored(pick: UserLeaguePick, game: WeekGame) {
+		return {
+			...livePickToDemo(pick)!,
+			week_number: pick.week_number,
+			outcome: pick.outcome,
+			points_awarded: pick.points_awarded
+		};
+	}
 
 	$effect(() => {
 		activeWeek;
 		pendingPick = null;
+		reuseConfirm = null;
 	});
 
 	$effect(() => {
-		JSON.stringify(demoState.picks);
+		if (mode === 'demo') {
+			JSON.stringify(demoState?.picks ?? {});
+		} else {
+			userPicksByWeek;
+		}
 		pendingPick = null;
 	});
 
 	$effect(() => {
-		if (!demoState.enabled) {
+		if (mode === 'demo' && !demoState?.enabled) {
 			games = [];
 			priorWeekGames = [];
 			loading = false;
@@ -88,7 +210,7 @@
 		error = null;
 
 		const fetches = [fetchWeekGames(seasonYear, week)];
-		if (prevWeek !== null && priorResultsVisible) {
+		if (prevWeek !== null && priorPick) {
 			fetches.push(fetchWeekGames(seasonYear, prevWeek));
 		}
 
@@ -113,111 +235,220 @@
 		});
 	});
 
+	function applyPendingPick(pick: DemoPick, clearWeek: number | null) {
+		const options = clearWeek !== null ? { clearWeek } : undefined;
+		void onSavePick(activeWeek, pick, options);
+		pendingPick = null;
+		reuseConfirm = null;
+	}
+
 	function handleSelectTeam(game: WeekGame, teamId: string) {
 		if (!pickingEnabled) return;
-		const pick = buildDemoPick(game, teamId, underdogThreshold);
+		const pick = buildDemoPick(game, teamId, underdogThreshold, mode === 'live');
 		if (!pick) return;
+
+		const usedWeek = usageMap.get(teamId);
+		if (usedWeek !== undefined) {
+			reuseConfirm = { pick, clearWeek: usedWeek };
+			return;
+		}
+
 		pendingPick = pick;
 	}
 
 	function handleSubmitPick() {
-		if (!pendingPick || pickSubmitted) return;
-		onSavePick(activeWeek, pendingPick);
-		pendingPick = null;
+		if (!pendingPick || saving) return;
+		if (mode === 'demo' && pickSubmitted) return;
+
+		const usedWeek = usageMap.get(pendingPick.team_id);
+		if (usedWeek !== undefined) {
+			reuseConfirm = { pick: pendingPick, clearWeek: usedWeek };
+			return;
+		}
+
+		applyPendingPick(pendingPick, null);
+	}
+
+	function confirmReuse() {
+		if (!reuseConfirm) return;
+		applyPendingPick(reuseConfirm.pick, reuseConfirm.clearWeek);
+	}
+
+	function cancelReuse() {
+		reuseConfirm = null;
 	}
 </script>
 
-{#if !demoState.enabled}
-	<p class="muted">Enable demo mode above to make picks.</p>
-{:else if loading}
-	<p class="muted">Loading Week {activeWeek} games…</p>
-{:else if error}
-	<p class="error" role="alert">{error}</p>
+{#if mode === 'demo' && !demoState?.enabled}
+	<p class="muted">Demo mode is unavailable for this season.</p>
 {:else}
-	{#if priorScored}
-		<div class="result-banner {priorScored.outcome}">
-			<p class="result-title">Week {priorWeek} result</p>
-			<p class="result-body">
-				<span class="pick-with-logo">
-					<TeamLogo teamCode={priorScored.team_id} size={28} />
-					You picked <strong>{priorScored.team_abbreviation}</strong>
-				</span>
-				({formatWinPct(priorScored.win_pct_at_pick)})
-				— {outcomeLabel(priorScored.outcome)},
-				{formatPoints(priorScored.points_awarded)} pt{formatPoints(priorScored.points_awarded) === '1' ? '' : 's'}
-				{#if priorScored.outcome === 'win' && priorScored.is_underdog_at_pick}
-					<span class="underdawg-note">Underdawg bonus!</span>
-				{/if}
-			</p>
-		</div>
-	{/if}
+	<div class="pick-sticky-bar">
+		<WeekNavigator
+			{viewWeek}
+			onWeekChange={onWeekChange}
+			label={weekNavLabel}
+			compact
+			showReset={showWeekReset}
+			canReset={canWeekReset}
+			onReset={onWeekReset}
+		/>
 
-	<div class="week-header">
-		<h3>Week {activeWeek}</h3>
-		{#if pickSubmitted}
-			<span class="locked-label">Pick submitted</span>
-		{:else if pickingEnabled}
-			<span class="open-label">Choose a team, then submit</span>
+		{#if !loading && !error}
+			<div class="pick-toolbar">
+				<div
+					class="pick-status"
+					class:status-submitted={pickSubmitted && !pendingPick}
+					class:status-ready={pendingPick !== null}
+					class:status-needed={pickingEnabled && !pickSubmitted && !pendingPick}
+					class:status-locked={!pickingEnabled && pickSubmitted}
+				>
+					{#if pendingPick}
+						<span class="status-indicator ready" aria-hidden="true"></span>
+						<span class="status-text">
+							Ready to submit · <strong>{pendingPick.team_abbreviation}</strong>
+							<span class="status-meta">({formatWinPct(pendingPick.win_pct_at_pick)})</span>
+						</span>
+					{:else if pickSubmitted && currentPick}
+						<TeamLogo teamCode={currentPick.team_id} size={22} />
+						<span class="status-text">
+							Pick submitted · <strong>{currentPick.team_abbreviation}</strong>
+							<span class="status-meta">({formatWinPct(currentPick.win_pct_at_pick)})</span>
+						</span>
+						{#if mode === 'live' && !canChangeLivePick}
+							<span class="status-tag">Locked</span>
+						{/if}
+					{:else if pickingEnabled}
+						<span class="status-indicator needed" aria-hidden="true"></span>
+						<span class="status-text">Pick not submitted — choose a team below</span>
+					{:else if mode === 'demo' && !weekOpen}
+						<span class="status-indicator locked" aria-hidden="true"></span>
+						<span class="status-text">This week is closed</span>
+					{:else}
+						<span class="status-indicator locked" aria-hidden="true"></span>
+						<span class="status-text">No pick for Week {activeWeek}</span>
+					{/if}
+				</div>
+
+				{#if showSubmitButton}
+					<button
+						type="button"
+						class="submit-pick-btn"
+						disabled={!pendingPick || saving}
+						onclick={handleSubmitPick}
+					>
+						{#if saving}
+							Saving…
+						{:else if pendingPick}
+							Submit · {pendingPick.team_abbreviation}
+						{:else}
+							Submit pick
+						{/if}
+					</button>
+				{/if}
+			</div>
+		{:else if loading}
+			<div class="pick-toolbar pick-toolbar-loading">
+				<span class="muted">Loading Week {activeWeek} games…</span>
+			</div>
 		{/if}
 	</div>
 
-	{#if pickSubmitted && !showResults}
-		<div class="locked-pick">
-			<p class="pick-with-logo">
-				<TeamLogo teamCode={currentPick.team_id} size={32} />
-				<span>
-					Your pick: <strong>{currentPick.team_abbreviation}</strong>
-					({formatWinPct(currentPick.win_pct_at_pick)})
-				</span>
-			</p>
-			<p class="muted">Time travel forward to see how you did.</p>
-		</div>
-	{/if}
-
-	{#if currentScored}
-		<div class="result-banner {currentScored.outcome}">
-			<p class="result-title">This week's result</p>
-			<p class="result-body pick-with-logo">
-				<TeamLogo teamCode={currentScored.team_id} size={28} />
-				<strong>{currentScored.team_abbreviation}</strong>
-				— {outcomeLabel(currentScored.outcome)},
-				{formatPoints(currentScored.points_awarded)} pt{formatPoints(currentScored.points_awarded) === '1' ? '' : 's'}
-			</p>
-		</div>
-	{/if}
-
-	{#if games.length === 0}
-		<p class="muted">No games found for Week {activeWeek}.</p>
+	{#if loading}
+		<!-- games loading; sticky bar shows status above -->
+	{:else if error}
+		<p class="error" role="alert">{error}</p>
 	{:else}
-		{#if pickingEnabled}
-			<button
-				type="button"
-				class="submit-pick-btn"
-				disabled={!pendingPick}
-				onclick={handleSubmitPick}
-			>
-				{#if pendingPick}
-					Submit pick · {pendingPick.team_abbreviation} ({formatWinPct(pendingPick.win_pct_at_pick)})
-				{:else}
-					Submit pick
-				{/if}
-			</button>
+	<div class="pick-scroll-content">
+		{#if priorScored}
+			<div class="result-banner {priorScored.outcome}">
+				<p class="result-title">Week {priorWeek} result</p>
+				<p class="result-body">
+					<span class="pick-with-logo">
+						<TeamLogo teamCode={priorScored.team_id} size={28} />
+						You picked <strong>{priorScored.team_abbreviation}</strong>
+					</span>
+					({formatWinPct(priorScored.win_pct_at_pick)})
+					— {outcomeLabel(priorScored.outcome)},
+					{formatPoints(priorScored.points_awarded)} pt{formatPoints(priorScored.points_awarded) === '1' ? '' : 's'}
+					{#if priorScored.outcome === 'win' && priorScored.is_underdog_at_pick}
+						<span class="underdawg-note">Underdawg bonus!</span>
+					{/if}
+				</p>
+			</div>
 		{/if}
 
-		<div class="games-list">
-			{#each games as game (game.id)}
-				<GameCard
-					{game}
-					selectedTeamId={displayTeamId}
-					{usedTeamIds}
-					{pickingEnabled}
-					{showResults}
-					{underdogThreshold}
-					onSelectTeam={(teamId) => handleSelectTeam(game, teamId)}
-				/>
-			{/each}
-		</div>
+		{#if pickSubmitted && !showResults && mode === 'demo'}
+			<p class="hint muted">Time travel forward to see how you did.</p>
+		{:else if pickSubmitted && !showResults && mode === 'live' && canChangeLivePick}
+			<p class="hint muted">You can change this pick until kickoff.</p>
+		{:else if pickSubmitted && !showResults && mode === 'live' && !canChangeLivePick}
+			<p class="hint muted">Result pending — check back after the game.</p>
+		{/if}
+
+		{#if currentScored}
+			<div class="result-banner {currentScored.outcome}">
+				<p class="result-title">This week's result</p>
+				<p class="result-body pick-with-logo">
+					<TeamLogo teamCode={currentScored.team_id} size={28} />
+					<strong>{currentScored.team_abbreviation}</strong>
+					— {outcomeLabel(currentScored.outcome)},
+					{formatPoints(currentScored.points_awarded)} pt{formatPoints(currentScored.points_awarded) === '1' ? '' : 's'}
+				</p>
+			</div>
+		{/if}
+
+		{#if games.length === 0}
+			<p class="muted">No games found for Week {activeWeek}.</p>
+		{:else}
+			<div class="games-list">
+				{#each games as game (game.id)}
+					<GameCard
+						{game}
+						selectedTeamId={displayTeamId}
+						teamUsageByWeek={usageMap}
+						{activeWeek}
+						{pickingEnabled}
+						{showResults}
+						{underdogThreshold}
+						onSelectTeam={(teamId) => handleSelectTeam(game, teamId)}
+					/>
+				{/each}
+			</div>
+		{/if}
+	</div>
 	{/if}
+{/if}
+
+{#if reuseConfirm}
+	<!-- svelte-ignore a11y_no_static_element_interactions -->
+	<div
+		class="modal-backdrop"
+		role="presentation"
+		onclick={cancelReuse}
+		onkeydown={(e) => e.key === 'Escape' && cancelReuse()}
+	>
+		<div
+			class="modal"
+			role="dialog"
+			aria-modal="true"
+			aria-labelledby="reuse-title"
+			tabindex="-1"
+			onclick={(e) => e.stopPropagation()}
+		>
+			<h4 id="reuse-title" class="modal-title">Change team selection?</h4>
+			<p class="modal-body">
+				You already picked <strong>{reuseConfirm.pick.team_abbreviation}</strong> in Week
+				{reuseConfirm.clearWeek}. Moving your pick to Week {activeWeek} will remove your previous
+				selection.
+			</p>
+			<div class="modal-actions">
+				<button type="button" class="btn-cancel" onclick={cancelReuse}>Cancel</button>
+				<button type="button" class="btn-confirm" disabled={saving} onclick={confirmReuse}>
+					{saving ? 'Saving…' : 'Continue'}
+				</button>
+			</div>
+		</div>
+	</div>
 {/if}
 
 <style>
@@ -236,47 +467,116 @@
 		font-size: 0.875rem;
 	}
 
-	.week-header {
+	.pick-sticky-bar {
+		position: sticky;
+		top: 0;
+		z-index: 25;
+		margin: 0 -1rem 1rem;
+		padding: 0.75rem 1rem 0.85rem;
+		border-bottom: 1px solid var(--border);
+		background: rgba(12, 14, 18, 0.94);
+		backdrop-filter: blur(10px);
+		box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+	}
+
+	.pick-toolbar {
 		display: flex;
-		align-items: baseline;
+		align-items: center;
 		justify-content: space-between;
-		gap: 0.75rem;
-		margin: 1rem 0 0.75rem;
+		gap: 0.65rem;
+		margin-top: 0.75rem;
+		padding-top: 0.75rem;
+		border-top: 1px solid var(--border);
 	}
 
-	.week-header h3 {
-		margin: 0;
-		font-size: 1.1rem;
-		color: var(--text);
+	.pick-toolbar-loading {
+		justify-content: flex-start;
 	}
 
-	.open-label {
-		font-size: 0.8rem;
-		color: var(--accent);
-		font-weight: 600;
+	.pick-toolbar-loading .muted {
+		font-size: 0.82rem;
 	}
 
-	.locked-label {
-		font-size: 0.8rem;
+	.pick-status {
+		display: flex;
+		align-items: center;
+		gap: 0.45rem;
+		min-width: 0;
+		flex: 1;
+		font-size: 0.82rem;
 		color: var(--text-muted);
 	}
 
-	.locked-pick {
-		margin-bottom: 0.85rem;
-		padding: 0.75rem 0.9rem;
+	.status-text {
+		min-width: 0;
+		line-height: 1.35;
+	}
+
+	.status-text strong {
+		color: var(--text);
+	}
+
+	.status-meta {
+		color: var(--text-muted);
+		font-size: 0.78rem;
+	}
+
+	.status-indicator {
+		width: 0.55rem;
+		height: 0.55rem;
+		border-radius: 50%;
+		flex-shrink: 0;
+	}
+
+	.status-indicator.needed {
+		background: #fbbf24;
+		box-shadow: 0 0 0 3px rgba(251, 191, 36, 0.2);
+	}
+
+	.status-indicator.ready {
+		background: var(--accent);
+		box-shadow: 0 0 0 3px rgba(94, 224, 109, 0.2);
+	}
+
+	.status-indicator.locked {
+		background: var(--text-muted);
+		opacity: 0.65;
+	}
+
+	.pick-status.status-submitted {
+		color: var(--text);
+	}
+
+	.pick-status.status-ready {
+		color: var(--text);
+	}
+
+	.pick-status.status-needed {
+		color: var(--text-muted);
+	}
+
+	.status-tag {
+		flex-shrink: 0;
+		padding: 0.12rem 0.45rem;
+		border-radius: 999px;
+		font-size: 0.68rem;
+		font-weight: 700;
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+		color: var(--text-muted);
+		background: rgba(255, 255, 255, 0.06);
 		border: 1px solid var(--border);
-		border-radius: 8px;
-		background: rgba(94, 224, 109, 0.06);
 	}
 
-	.locked-pick p {
-		margin: 0;
-		font-size: 0.9rem;
+	.pick-scroll-content {
+		display: flex;
+		flex-direction: column;
+		gap: 0;
 	}
 
-	.locked-pick .muted {
-		margin-top: 0.35rem;
-		font-size: 0.8rem;
+	.hint {
+		margin: 0 0 0.85rem;
+		font-size: 0.82rem;
 	}
 
 	.result-banner {
@@ -329,18 +629,17 @@
 	}
 
 	.submit-pick-btn {
-		display: block;
-		width: 100%;
-		margin-bottom: 0.85rem;
-		padding: 0.75rem 1rem;
+		flex-shrink: 0;
+		padding: 0.55rem 0.85rem;
 		border: none;
-		border-radius: 10px;
+		border-radius: 8px;
 		background: var(--accent);
 		color: #0c0e12;
-		font-size: 0.95rem;
+		font-size: 0.85rem;
 		font-weight: 700;
 		cursor: pointer;
 		transition: filter 0.15s, opacity 0.15s;
+		white-space: nowrap;
 	}
 
 	.submit-pick-btn:hover:not(:disabled) {
@@ -356,5 +655,83 @@
 		display: flex;
 		flex-direction: column;
 		gap: 0.65rem;
+	}
+
+	.modal-backdrop {
+		position: fixed;
+		inset: 0;
+		z-index: 100;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: 1rem;
+		background: rgba(0, 0, 0, 0.55);
+	}
+
+	.modal {
+		width: min(100%, 24rem);
+		padding: 1.1rem 1.2rem;
+		border: 1px solid var(--border);
+		border-radius: 12px;
+		background: var(--bg-elevated);
+		box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+	}
+
+	.modal-title {
+		margin: 0 0 0.5rem;
+		font-size: 1rem;
+		color: var(--text);
+	}
+
+	.modal-body {
+		margin: 0;
+		font-size: 0.9rem;
+		color: var(--text-muted);
+		line-height: 1.45;
+	}
+
+	.modal-actions {
+		display: flex;
+		justify-content: flex-end;
+		gap: 0.5rem;
+		margin-top: 1rem;
+	}
+
+	.btn-cancel,
+	.btn-confirm {
+		padding: 0.45rem 0.75rem;
+		border-radius: 8px;
+		font-size: 0.85rem;
+		font-weight: 600;
+		cursor: pointer;
+	}
+
+	.btn-cancel {
+		border: 1px solid var(--border);
+		background: transparent;
+		color: var(--text-muted);
+	}
+
+	.btn-confirm {
+		border: none;
+		background: var(--accent);
+		color: #0c0e12;
+	}
+
+	.btn-confirm:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+
+	@media (max-width: 480px) {
+		.pick-toolbar {
+			flex-direction: column;
+			align-items: stretch;
+		}
+
+		.submit-pick-btn {
+			width: 100%;
+			padding: 0.65rem 0.85rem;
+		}
 	}
 </style>

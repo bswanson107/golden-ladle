@@ -2,10 +2,13 @@
 	import { page } from '$app/stores';
 	import { base } from '$app/paths';
 	import { useAuth } from '$lib/auth';
-	import DemoTimeTravel from '$lib/components/pick/DemoTimeTravel.svelte';
+	import DemoBanner from '$lib/components/pick/DemoBanner.svelte';
 	import PickWeekPanel from '$lib/components/pick/PickWeekPanel.svelte';
-	import { loadDemoState, resetDemoPicks, saveDemoState } from '$lib/demo';
+	import { hasDemoPicks, loadDemoState, resetDemoPicks, saveDemoState } from '$lib/demo';
 	import { fetchLeague } from '$lib/leagues';
+	import { loadViewWeek, saveViewWeek } from '$lib/pickView';
+	import { fetchUserLeaguePicks, picksByWeek, saveLeaguePick, type UserLeaguePick } from '$lib/picks';
+	import { isDemoSeason } from '$lib/season';
 	import type { DemoPick, DemoState } from '$lib/types/demo';
 	import type { LeagueWithRole } from '$lib/types/league';
 
@@ -13,10 +16,16 @@
 
 	let league = $state<LeagueWithRole | null>(null);
 	let demoState = $state<DemoState>({ enabled: false, simulatedWeek: 1, picks: {} });
+	let viewWeek = $state(1);
+	let userPicks = $state<UserLeaguePick[]>([]);
 	let loading = $state(true);
+	let saving = $state(false);
 	let error = $state<string | null>(null);
+	let saveError = $state<string | null>(null);
 
 	const leagueId = $derived($page.params.id);
+	const isDemo = $derived(league !== null && isDemoSeason(league.season_year));
+	const userPicksByWeek = $derived(picksByWeek(userPicks));
 
 	$effect(() => {
 		const user = auth.user;
@@ -26,17 +35,47 @@
 		loading = true;
 		error = null;
 
-		fetchLeague(id, user.id).then((result) => {
+		fetchLeague(id, user.id).then(async (result) => {
 			if (result.error || !result.league) {
 				league = null;
 				error = result.error ?? 'League not found.';
-			} else {
-				league = result.league;
-				demoState = loadDemoState(id, user.id);
+				userPicks = [];
+				loading = false;
+				return;
 			}
+
+			league = result.league;
+
+			if (isDemoSeason(result.league.season_year)) {
+				demoState = loadDemoState(id, user.id, result.league.season_year);
+				viewWeek = demoState.simulatedWeek;
+				userPicks = [];
+			} else {
+				viewWeek = loadViewWeek(id, user.id);
+				demoState = loadDemoState(id, user.id, result.league.season_year);
+				const picksResult = await fetchUserLeaguePicks(id, user.id);
+				if (picksResult.error) {
+					error = picksResult.error;
+					userPicks = [];
+				} else {
+					userPicks = picksResult.picks;
+				}
+			}
+
 			loading = false;
 		});
 	});
+
+	async function reloadUserPicks() {
+		const user = auth.user;
+		const id = leagueId;
+		if (!user || !id) return;
+
+		const picksResult = await fetchUserLeaguePicks(id, user.id);
+		if (!picksResult.error) {
+			userPicks = picksResult.picks;
+		}
+	}
 
 	function persistDemoState(next: DemoState) {
 		const user = auth.user;
@@ -46,23 +85,64 @@
 		saveDemoState(id, user.id, next);
 	}
 
-	function handleToggle(enabled: boolean) {
-		persistDemoState({ ...demoState, enabled });
-	}
+	function handleWeekChange(week: number) {
+		const user = auth.user;
+		const id = leagueId;
+		if (!user || !id || !league) return;
 
-	function handleWeekChange(simulatedWeek: number) {
-		persistDemoState({ ...demoState, simulatedWeek });
+		if (isDemoSeason(league.season_year)) {
+			persistDemoState({ ...demoState, simulatedWeek: week });
+			viewWeek = week;
+		} else {
+			viewWeek = week;
+			saveViewWeek(id, user.id, week);
+		}
 	}
 
 	function handleResetDemo() {
 		persistDemoState(resetDemoPicks(demoState));
 	}
 
-	function handleSavePick(week: number, pick: DemoPick) {
-		persistDemoState({
-			...demoState,
-			picks: { ...demoState.picks, [week]: pick }
+	function handleSaveDemoPick(week: number, pick: DemoPick, options?: { clearWeek?: number }) {
+		const nextPicks = { ...demoState.picks, [week]: pick };
+		if (options?.clearWeek !== undefined) {
+			delete nextPicks[options.clearWeek];
+		}
+		persistDemoState({ ...demoState, picks: nextPicks });
+	}
+
+	async function handleSaveLivePick(week: number, pick: DemoPick, options?: { clearWeek?: number }) {
+		const id = leagueId;
+		const user = auth.user;
+		if (!id || !user) return;
+
+		saveError = null;
+		saving = true;
+
+		const existingPickId = userPicksByWeek.get(week)?.id ?? null;
+		const clearWeekPickId =
+			options?.clearWeek !== undefined
+				? (userPicksByWeek.get(options.clearWeek)?.id ?? null)
+				: null;
+
+		const result = await saveLeaguePick({
+			leagueId: id,
+			week,
+			gameId: pick.game_id,
+			teamId: pick.team_id,
+			userId: user.id,
+			existingPickId,
+			clearWeekPickId
 		});
+
+		saving = false;
+
+		if (result.error) {
+			saveError = result.error;
+			return;
+		}
+
+		await reloadUserPicks();
 	}
 </script>
 
@@ -76,21 +156,31 @@
 	{:else if error || !league}
 		<p class="auth-error" role="alert">{error ?? 'League not found.'}</p>
 	{:else}
+		{#if isDemo}
+			<DemoBanner />
+		{/if}
+
 		<h1 class="page-title">Make your pick</h1>
 		<p class="page-subtitle">{league.name} · {league.season_year} season</p>
 
-		<DemoTimeTravel
-			demoState={demoState}
-			onToggle={handleToggle}
-			onWeekChange={handleWeekChange}
-			onReset={handleResetDemo}
-		/>
+		{#if saveError}
+			<p class="auth-error pick-error" role="alert">{saveError}</p>
+		{/if}
 
 		<section class="pick-section">
 			<PickWeekPanel
+				mode={isDemo ? 'demo' : 'live'}
 				seasonYear={league.season_year}
-				demoState={demoState}
-				onSavePick={handleSavePick}
+				viewWeek={isDemo ? demoState.simulatedWeek : viewWeek}
+				onWeekChange={handleWeekChange}
+				weekNavLabel={isDemo ? 'Simulated time' : 'View week'}
+				showWeekReset={isDemo}
+				canWeekReset={hasDemoPicks(demoState)}
+				onWeekReset={isDemo ? handleResetDemo : undefined}
+				demoState={isDemo ? demoState : null}
+				{userPicksByWeek}
+				{saving}
+				onSavePick={isDemo ? handleSaveDemoPick : handleSaveLivePick}
 			/>
 		</section>
 	{/if}
@@ -112,6 +202,10 @@
 	}
 
 	.pick-section {
-		margin-top: 1.25rem;
+		margin-top: 0.75rem;
+	}
+
+	.pick-error {
+		margin-top: 1rem;
 	}
 </style>

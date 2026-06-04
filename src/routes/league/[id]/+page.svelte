@@ -4,7 +4,8 @@
 	import { base } from '$app/paths';
 	import { useAdmin, useAuth } from '$lib/auth';
 	import { isAppAdmin } from '$lib/admin';
-	import DemoTimeTravel from '$lib/components/pick/DemoTimeTravel.svelte';
+	import DemoBanner from '$lib/components/pick/DemoBanner.svelte';
+	import WeekNavigator from '$lib/components/pick/WeekNavigator.svelte';
 	import StandingsTable from '$lib/components/league/StandingsTable.svelte';
 	import PicksGrid from '$lib/components/league/PicksGrid.svelte';
 	import TeamLogo from '$lib/components/TeamLogo.svelte';
@@ -12,6 +13,7 @@
 		formatPoints,
 		getLatestScoredPick,
 		getMaxVisibleWeek,
+		hasDemoPicks,
 		loadDemoState,
 		mergeDemoLeagueView,
 		outcomeLabel,
@@ -22,6 +24,7 @@
 	import { fetchWeekGames } from '$lib/games';
 	import { adminKickLeagueMember, fetchLeague } from '$lib/leagues';
 	import { fetchLeaguePicks, fetchLeagueStandings } from '$lib/standings';
+	import { isDemoSeason } from '$lib/season';
 	import type { DemoState } from '$lib/types/demo';
 	import type { WeekGame } from '$lib/types/game';
 	import type { LeagueWithRole } from '$lib/types/league';
@@ -47,6 +50,8 @@
 		isAppAdmin(auth.user?.email) && admin.adminModeEnabled
 	);
 
+	const isDemo = $derived(league !== null && isDemoSeason(league.season_year));
+
 	const playerDisplayName = $derived.by(() => {
 		const user = auth.user;
 		if (!user) return 'You';
@@ -67,6 +72,10 @@
 			return { picks, standings, maxVisibleWeek: null, demoActive: false };
 		}
 
+		if (!isDemoSeason(league?.season_year ?? 0)) {
+			return { picks, standings, maxVisibleWeek: null, demoActive: false };
+		}
+
 		return {
 			...mergeDemoLeagueView(
 				picks,
@@ -81,15 +90,15 @@
 	});
 
 	const latestDemoPick = $derived.by(() => {
-		if (!demoState.enabled) return null;
+		if (!isDemo || !demoState.enabled) return null;
 		return getLatestScoredPick(demoState, demoGamesByWeek);
 	});
 
 	function refreshDemoState() {
 		const user = auth.user;
 		const id = leagueId;
-		if (!user || !id) return;
-		demoState = loadDemoState(id, user.id);
+		if (!user || !id || !league) return;
+		demoState = loadDemoState(id, user.id, league.season_year);
 	}
 
 	function persistDemoState(next: DemoState) {
@@ -100,11 +109,8 @@
 		saveDemoState(id, user.id, next);
 	}
 
-	function handleDemoToggle(enabled: boolean) {
-		persistDemoState({ ...demoState, enabled });
-	}
-
 	function handleDemoWeekChange(simulatedWeek: number) {
+		if (!isDemo) return;
 		persistDemoState({ ...demoState, simulatedWeek });
 	}
 
@@ -182,7 +188,7 @@
 				demoState = { enabled: false, simulatedWeek: 1, picks: {} };
 			} else {
 				league = leagueResult.league;
-				refreshDemoState();
+				demoState = loadDemoState(id, user.id, leagueResult.league.season_year);
 				if (standingsResult.error) {
 					error = standingsResult.error;
 					standings = [];
@@ -253,6 +259,10 @@
 	{:else if error || !league}
 		<p class="auth-error" role="alert">{error ?? 'League not found.'}</p>
 	{:else}
+		{#if isDemo}
+			<DemoBanner />
+		{/if}
+
 		<h1 class="page-title">{league.name}</h1>
 		<p class="page-subtitle">{league.season_year} season</p>
 
@@ -260,13 +270,17 @@
 			<div class="pick-cta-row">
 				<div>
 					<h2 class="card-title">Your pick</h2>
-					<p class="muted">Choose a team for this week's games.</p>
+					<p class="muted">
+						{isDemo
+							? 'Preview picks with historical 2025 results.'
+							: 'Choose a team for this week’s games.'}
+					</p>
 				</div>
 				<a href="{base}/league/{league.id}/pick" class="btn btn-primary btn-sm">Make your pick</a>
 			</div>
-			{#if demoState.enabled}
+			{#if isDemo}
 				<p class="demo-summary">
-					Demo mode: {simulatedWeekLabel(demoState.simulatedWeek)}
+					Viewing {simulatedWeekLabel(demoState.simulatedWeek)}
 					{#if latestDemoPick}
 						<span class="demo-summary-result">
 							· Latest result:
@@ -279,14 +293,18 @@
 			{/if}
 		</section>
 
-		<section class="demo-travel-wrap">
-			<DemoTimeTravel
-				demoState={demoState}
-				onToggle={handleDemoToggle}
-				onWeekChange={handleDemoWeekChange}
-				onReset={handleResetDemo}
-			/>
-		</section>
+		{#if isDemo}
+			<section class="demo-travel-wrap">
+				<WeekNavigator
+					viewWeek={demoState.simulatedWeek}
+					onWeekChange={handleDemoWeekChange}
+					label="Simulated time"
+					showReset
+					canReset={hasDemoPicks(demoState)}
+					onReset={handleResetDemo}
+				/>
+			</section>
+		{/if}
 
 		{#if league.is_commissioner}
 			<section class="card">

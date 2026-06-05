@@ -307,6 +307,16 @@
 		{/if}
 
 		{#if league.is_commissioner}
+			<section class="card commissioner-tools">
+				<div class="commissioner-tools-row">
+					<div>
+						<h2 class="card-title">Commissioner</h2>
+						<p class="muted">Override picks, fix scores, and view sync diagnostics.</p>
+					</div>
+					<a href="{base}/league/{league.id}/admin" class="btn btn-ghost btn-sm">Admin tools</a>
+				</div>
+			</section>
+
 			<section class="card">
 				<h2 class="card-title">Invite family</h2>
 				<p class="muted">Share this code so others can join.</p>
@@ -411,6 +421,13 @@
 	}
 
 	.pick-cta-row {
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: 1rem;
+	}
+
+	.commissioner-tools-row {
 		display: flex;
 		align-items: flex-start;
 		justify-content: space-between;

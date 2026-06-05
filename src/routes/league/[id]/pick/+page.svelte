@@ -51,7 +51,7 @@
 				viewWeek = demoState.simulatedWeek;
 				userPicks = [];
 			} else {
-				viewWeek = loadViewWeek(id, user.id);
+				viewWeek = loadViewWeek(id, user.id, result.league.season_year);
 				demoState = loadDemoState(id, user.id, result.league.season_year);
 				const picksResult = await fetchUserLeaguePicks(id, user.id);
 				if (picksResult.error) {

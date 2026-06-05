@@ -1,5 +1,6 @@
 import { browser } from '$app/environment';
 import { clampSimulatedWeek } from '$lib/demo';
+import { getCurrentWeekFromDate } from '$lib/season';
 
 const VIEW_WEEK_PREFIX = 'golden-ladle-view-week';
 
@@ -7,15 +8,19 @@ function viewWeekKey(leagueId: string, userId: string): string {
 	return `${VIEW_WEEK_PREFIX}:${leagueId}:${userId}`;
 }
 
-export function loadViewWeek(leagueId: string, userId: string): number {
-	if (!browser) return 1;
+export function loadViewWeek(
+	leagueId: string,
+	userId: string,
+	seasonYear = 2026
+): number {
+	if (!browser) return getCurrentWeekFromDate(new Date(), seasonYear);
 
 	try {
 		const raw = localStorage.getItem(viewWeekKey(leagueId, userId));
-		if (!raw) return 1;
+		if (!raw) return getCurrentWeekFromDate(new Date(), seasonYear);
 		return clampSimulatedWeek(Number(raw) || 1);
 	} catch {
-		return 1;
+		return getCurrentWeekFromDate(new Date(), seasonYear);
 	}
 }
 

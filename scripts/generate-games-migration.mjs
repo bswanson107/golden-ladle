@@ -1,5 +1,6 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { normalizedWinPcts } from '../src/lib/sync/winPct.ts';
 
 const TEAM_MAP = { LA: 'LAR' };
 
@@ -12,22 +13,11 @@ function parseCsvLine(line) {
 	return line.split(',').map((c) => c.trim().replace(/\r$/, ''));
 }
 
-function americanToImpliedProb(odds) {
-	const o = Number(odds);
-	if (Number.isNaN(o) || odds === '') return null;
-	if (o < 0) return -o / (-o + 100);
-	return 100 / (o + 100);
-}
-
 function winPcts(awayMl, homeMl) {
-	const awayRaw = americanToImpliedProb(awayMl);
-	const homeRaw = americanToImpliedProb(homeMl);
-	if (awayRaw == null || homeRaw == null) return { away: null, home: null };
-	const total = awayRaw + homeRaw;
-	return {
-		away: Math.round((awayRaw / total) * 10000) / 100,
-		home: Math.round((homeRaw / total) * 10000) / 100
-	};
+	return normalizedWinPcts(
+		awayMl === '' || awayMl == null ? null : Number(awayMl),
+		homeMl === '' || homeMl == null ? null : Number(homeMl)
+	);
 }
 
 function sqlNum(value) {

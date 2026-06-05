@@ -11,7 +11,10 @@
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
 		"db:apply-admin-kick": "node scripts/apply-sql.mjs supabase/migrations/006_admin_kick_member.sql",
-		"db:generate-games": "node scripts/generate-games-migration.mjs"
+		"db:generate-games": "node --import tsx/esm scripts/generate-games-migration.mjs",
+		"sync:copy-functions": "rm -rf supabase/functions/_shared/sync && mkdir -p supabase/functions/_shared && cp -R src/lib/sync supabase/functions/_shared/sync",
+		"sync:nfl": "node --import tsx/esm scripts/sync-nfl-data.mjs",
+		"functions:deploy": "npm run sync:copy-functions && npx supabase functions deploy sync-nfl-data"
 	},
 	"devDependencies": {
 		"@sveltejs/adapter-auto": "^7.0.1",
@@ -21,6 +24,7 @@
 		"svelte": "^5.55.2",
 		"svelte-check": "^4.4.6",
 		"pg": "^8.16.0",
+		"tsx": "^4.20.3",
 		"typescript": "^6.0.2",
 		"vite": "^8.0.7"
 	},

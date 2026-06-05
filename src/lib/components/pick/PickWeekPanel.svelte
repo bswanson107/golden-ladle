@@ -14,6 +14,7 @@
 	} from '$lib/demo';
 	import { teamUsageByWeek, type UserLeaguePick } from '$lib/picks';
 	import { fetchWeekGames } from '$lib/games';
+	import { formatSyncTimeAgo, getLastSyncTime, requestGameSync } from '$lib/syncGames';
 	import type { DemoPick, DemoState } from '$lib/types/demo';
 	import type { WeekGame } from '$lib/types/game';
 
@@ -55,6 +56,8 @@
 	let error = $state<string | null>(null);
 	let pendingPick = $state<DemoPick | null>(null);
 	let reuseConfirm = $state<{ pick: DemoPick; clearWeek: number } | null>(null);
+	let lastSyncAt = $state<string | null>(null);
+	let syncNotice = $state<string | null>(null);
 
 	const activeWeek = $derived(
 		mode === 'demo' && demoState ? getActivePickWeek(demoState.simulatedWeek) : viewWeek
@@ -195,6 +198,33 @@
 		pendingPick = null;
 	});
 
+	const syncTimeLabel = $derived(formatSyncTimeAgo(lastSyncAt));
+
+	async function loadWeekGames(week: number, prevWeek: number | null, hasPriorPick: boolean) {
+		const fetches = [fetchWeekGames(seasonYear, week)];
+		if (prevWeek !== null && hasPriorPick) {
+			fetches.push(fetchWeekGames(seasonYear, prevWeek));
+		}
+
+		const results = await Promise.all(fetches);
+		const [weekResult, priorResult] = results;
+
+		if (weekResult.error) {
+			error = weekResult.error;
+			games = [];
+		} else {
+			games = weekResult.games;
+		}
+
+		if (priorResult?.error) {
+			priorWeekGames = [];
+		} else if (priorResult) {
+			priorWeekGames = priorResult.games;
+		} else {
+			priorWeekGames = [];
+		}
+	}
+
 	$effect(() => {
 		if (mode === 'demo' && !demoState?.enabled) {
 			games = [];
@@ -206,33 +236,34 @@
 
 		const week = activeWeek;
 		const prevWeek = priorWeek;
+		const hasPriorPick = priorPick !== null;
 		loading = true;
 		error = null;
+		syncNotice = null;
 
-		const fetches = [fetchWeekGames(seasonYear, week)];
-		if (prevWeek !== null && priorPick) {
-			fetches.push(fetchWeekGames(seasonYear, prevWeek));
-		}
+		void (async () => {
+			if (mode === 'live') {
+				const [syncResult, syncTime] = await Promise.all([
+					requestGameSync(),
+					getLastSyncTime()
+				]);
 
-		Promise.all(fetches).then((results) => {
-			const [weekResult, priorResult] = results;
-			if (weekResult.error) {
-				error = weekResult.error;
-				games = [];
-			} else {
-				games = weekResult.games;
+				lastSyncAt = syncResult.lastSyncAt ?? syncTime;
+
+				if (syncResult.error) {
+					syncNotice = 'Could not refresh odds — showing last saved data.';
+				} else if (syncResult.skipped) {
+					syncNotice = null;
+				} else if (syncResult.inProgress) {
+					syncNotice = 'Updating odds in the background…';
+				} else if (syncResult.gamesUpdated > 0 || syncResult.oddsUpdated > 0) {
+					syncNotice = 'Odds and scores updated.';
+				}
 			}
 
-			if (priorResult?.error) {
-				priorWeekGames = [];
-			} else if (priorResult) {
-				priorWeekGames = priorResult.games;
-			} else {
-				priorWeekGames = [];
-			}
-
+			await loadWeekGames(week, prevWeek, hasPriorPick);
 			loading = false;
-		});
+		})();
 	});
 
 	function applyPendingPick(pick: DemoPick, clearWeek: number | null) {
@@ -344,12 +375,26 @@
 							Submit pick
 						{/if}
 					</button>
-				{/if}
-			</div>
-		{:else if loading}
+			{/if}
+		</div>
+		{:else if loading && mode === 'live'}
 			<div class="pick-toolbar pick-toolbar-loading">
-				<span class="muted">Loading Week {activeWeek} games…</span>
+				<span class="muted">Refreshing odds and scores…</span>
 			</div>
+		{/if}
+
+		{#if mode === 'live' && (syncTimeLabel || syncNotice)}
+			<p class="sync-meta">
+				{#if syncTimeLabel}
+					Updated {syncTimeLabel}
+				{/if}
+				{#if syncNotice}
+					{#if syncTimeLabel}
+						·
+					{/if}
+					{syncNotice}
+				{/if}
+			</p>
 		{/if}
 	</div>
 
@@ -495,6 +540,13 @@
 
 	.pick-toolbar-loading .muted {
 		font-size: 0.82rem;
+	}
+
+	.sync-meta {
+		margin: 0.55rem 0 0;
+		font-size: 0.75rem;
+		color: var(--text-muted);
+		text-align: center;
 	}
 
 	.pick-status {

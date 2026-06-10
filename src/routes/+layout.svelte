@@ -47,7 +47,7 @@
 		!auth.loading && auth.user !== null && isAppAdmin(auth.user.email)
 	);
 
-	const publicRoutes = new Set(['/', '/login', '/signup']);
+	const publicRoutes = new Set(['/', '/login', '/signup', '/design']);
 
 	onMount(() => {
 		adminModeEnabled = loadAdminMode();
@@ -103,6 +103,8 @@
 				<span class="nav-muted">…</span>
 			{:else if auth.user}
 				<a href="{base}/leagues" class="nav-link">Leagues</a>
+				<a href="{base}/account" class="nav-link">Account</a>
+				<a href="{base}/design" class="nav-link">Design demo</a>
 				{#if showAdminToggle}
 					<label class="admin-toggle">
 						<input

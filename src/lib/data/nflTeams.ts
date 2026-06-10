@@ -206,3 +206,21 @@ export function isLightTeamColor(teamCode: string): boolean {
 	if (!isNFLTeamCode(teamCode)) return false;
 	return hexLuminance(NFL_TEAMS[teamCode].primaryColor) > 0.65;
 }
+
+/** Richer accent for light primaries so surface tints read on UI panels */
+const LIGHT_TEAM_SURFACE_TINT: Partial<Record<NFLTeamCode, string>> = {
+	LAR: '#003594',
+	LV: '#54595F',
+	NO: '#8B6914',
+	NYG: '#0B2265',
+	NYJ: '#12543d',
+	PIT: '#101010'
+};
+
+export function getTeamSurfaceTint(teamCode: string): string {
+	if (!isNFLTeamCode(teamCode)) return getTeamPrimaryColor(teamCode);
+	if (isLightTeamColor(teamCode) && LIGHT_TEAM_SURFACE_TINT[teamCode]) {
+		return LIGHT_TEAM_SURFACE_TINT[teamCode]!;
+	}
+	return getTeamPrimaryColor(teamCode);
+}

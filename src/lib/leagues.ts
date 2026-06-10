@@ -35,7 +35,8 @@ export async function fetchMyLeagues(userId: string): Promise<{
 				commissioner_id,
 				invite_code,
 				is_active,
-				created_at
+				created_at,
+				underdog_threshold_pct
 			)
 		`
 		)
@@ -155,7 +156,7 @@ export async function fetchLeague(
 
 	const { data, error } = await supabase
 		.from('leagues')
-		.select('id, name, season_year, commissioner_id, invite_code, is_active, created_at')
+		.select('id, name, season_year, commissioner_id, invite_code, is_active, created_at, underdog_threshold_pct')
 		.eq('id', leagueId)
 		.single();
 

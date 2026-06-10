@@ -106,7 +106,9 @@
 			: (pendingPick?.team_id ?? currentPick?.team_id ?? null)
 	);
 
-	const showSubmitButton = $derived(pickingEnabled && games.length > 0);
+	const showSubmitButton = $derived(
+		pickingEnabled && games.length > 0 && !(mode === 'live' && liveCurrentPick !== null)
+	);
 
 	const usageMap = $derived.by(() => {
 		if (mode === 'demo' && demoState) {
@@ -284,6 +286,13 @@
 			return;
 		}
 
+		// Live mode: changing an existing pick saves immediately (still editable until kickoff)
+		if (mode === 'live' && liveCurrentPick) {
+			pendingPick = null;
+			void onSavePick(activeWeek, pick);
+			return;
+		}
+
 		pendingPick = pick;
 	}
 
@@ -342,11 +351,15 @@
 					{:else if pickSubmitted && currentPick}
 						<TeamLogo teamCode={currentPick.team_id} size={22} />
 						<span class="status-text">
-							Pick submitted · <strong>{currentPick.team_abbreviation}</strong>
+							{#if mode === 'live' && canChangeLivePick}
+								Current pick · <strong>{currentPick.team_abbreviation}</strong>
+							{:else}
+								Pick submitted · <strong>{currentPick.team_abbreviation}</strong>
+							{/if}
 							<span class="status-meta">({formatWinPct(currentPick.win_pct_at_pick)})</span>
 						</span>
 						{#if mode === 'live' && !canChangeLivePick}
-							<span class="status-tag">Locked</span>
+							<span class="status-tag">Final</span>
 						{/if}
 					{:else if pickingEnabled}
 						<span class="status-indicator needed" aria-hidden="true"></span>
@@ -425,7 +438,7 @@
 		{#if pickSubmitted && !showResults && mode === 'demo'}
 			<p class="hint muted">Time travel forward to see how you did.</p>
 		{:else if pickSubmitted && !showResults && mode === 'live' && canChangeLivePick}
-			<p class="hint muted">You can change this pick until kickoff.</p>
+			<p class="hint muted">Tap another team to change your pick — you can change until kickoff.</p>
 		{:else if pickSubmitted && !showResults && mode === 'live' && !canChangeLivePick}
 			<p class="hint muted">Result pending — check back after the game.</p>
 		{/if}

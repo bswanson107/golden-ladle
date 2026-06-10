@@ -237,7 +237,8 @@ function demoPickToLeaguePick(
 	pick: DemoPick,
 	scored: ScoredDemoPick | null,
 	userId: string,
-	displayName: string
+	displayName: string,
+	game: WeekGame | null
 ): LeaguePick {
 	return {
 		id: `demo-${userId}-${week}`,
@@ -251,7 +252,11 @@ function demoPickToLeaguePick(
 		is_underdog_at_pick: pick.is_underdog_at_pick,
 		outcome: scored?.outcome ?? 'pending',
 		points_awarded: scored?.points_awarded ?? 0,
-		team_season_wins_at_pick: 0
+		team_season_wins_at_pick: 0,
+		game_id: pick.game_id,
+		kickoff_at: game?.kickoff_at ?? new Date(0).toISOString(),
+		is_missed: false,
+		is_commissioner_override: false
 	};
 }
 
@@ -335,7 +340,7 @@ export function mergeDemoLeagueView(
 		}
 
 		const scored = scoreDemoPick(week, demoPick, game, demoState.simulatedWeek);
-		mergedPicks.push(demoPickToLeaguePick(week, demoPick, scored, userId, displayName));
+		mergedPicks.push(demoPickToLeaguePick(week, demoPick, scored, userId, displayName, game));
 	}
 
 	const standings = buildStandingsFromPicks(mergedPicks, dbStandings, userId, displayName);

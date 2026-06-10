@@ -15,13 +15,17 @@ type PickQueryRow = {
 	user_id: string;
 	week_number: number;
 	team_id: string;
+	game_id: string;
 	win_pct_at_pick: number;
 	is_underdog_at_pick: boolean;
 	outcome: PickOutcome;
 	points_awarded: number;
 	team_season_wins_at_pick?: number;
+	is_missed: boolean;
+	is_commissioner_override: boolean;
 	profiles: { display_name: string } | { display_name: string }[] | null;
 	nfl_teams: { abbreviation: string; name: string } | { abbreviation: string; name: string }[] | null;
+	nfl_games: { kickoff_at: string } | { kickoff_at: string }[] | null;
 };
 
 function firstRelation<T>(value: T | T[] | null): T | null {
@@ -46,7 +50,8 @@ function recordFromPicks(picks: LeaguePick[]): Pick<StandingRow, 'wins' | 'losse
 function mapPickRow(row: PickQueryRow): LeaguePick | null {
 	const profile = firstRelation(row.profiles);
 	const team = firstRelation(row.nfl_teams);
-	if (!profile || !team) return null;
+	const game = firstRelation(row.nfl_games);
+	if (!profile || !team || !game) return null;
 
 	return {
 		id: row.id,
@@ -60,7 +65,11 @@ function mapPickRow(row: PickQueryRow): LeaguePick | null {
 		is_underdog_at_pick: row.is_underdog_at_pick,
 		outcome: row.outcome,
 		points_awarded: row.points_awarded,
-		team_season_wins_at_pick: row.team_season_wins_at_pick ?? 0
+		team_season_wins_at_pick: row.team_season_wins_at_pick ?? 0,
+		game_id: row.game_id,
+		kickoff_at: game.kickoff_at,
+		is_missed: row.is_missed,
+		is_commissioner_override: row.is_commissioner_override
 	};
 }
 
@@ -78,13 +87,17 @@ export async function fetchLeaguePicks(leagueId: string): Promise<{
 			user_id,
 			week_number,
 			team_id,
+			game_id,
 			win_pct_at_pick,
 			is_underdog_at_pick,
 			outcome,
 			points_awarded,
 			team_season_wins_at_pick,
+			is_missed,
+			is_commissioner_override,
 			profiles ( display_name ),
-			nfl_teams ( abbreviation, name )
+			nfl_teams ( abbreviation, name ),
+			nfl_games ( kickoff_at )
 		`
 		)
 		.eq('league_id', leagueId)

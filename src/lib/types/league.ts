@@ -6,6 +6,7 @@ export type League = {
 	invite_code: string;
 	is_active: boolean;
 	created_at: string;
+	underdog_threshold_pct: number;
 };
 
 export type LeagueMembership = {

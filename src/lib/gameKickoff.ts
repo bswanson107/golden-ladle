@@ -197,6 +197,19 @@ export function formatGameKickoffShort(kickoffAt: string): string {
 	}).format(new Date(kickoffAt));
 }
 
+/** Pick deadline label, e.g. "Thu, Sep 11 · 8:20 PM ET" */
+export function formatPickDeadline(kickoffIso: string): string {
+	const formatted = new Intl.DateTimeFormat('en-US', {
+		timeZone: ET_TIMEZONE,
+		weekday: 'short',
+		month: 'short',
+		day: 'numeric',
+		hour: 'numeric',
+		minute: '2-digit'
+	}).format(new Date(kickoffIso));
+	return `${formatted} ET`;
+}
+
 function broadcastBadge(slot: GameBroadcastSlot): GameKickoffBadge {
 	return {
 		kind: 'broadcast',

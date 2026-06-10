@@ -25,4 +25,8 @@ export type LeaguePick = {
 	outcome: PickOutcome;
 	points_awarded: number;
 	team_season_wins_at_pick?: number;
+	game_id: string;
+	kickoff_at: string;
+	is_missed: boolean;
+	is_commissioner_override: boolean;
 };

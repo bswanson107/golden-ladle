@@ -1,9 +1,7 @@
 import { getSupabase } from '$lib/supabase';
 import type { LeaguePick, PickOutcome } from '$lib/types/standings';
 
-export type UserLeaguePick = LeaguePick & {
-	game_id: string;
-};
+export type UserLeaguePick = LeaguePick;
 
 type UserPickQueryRow = {
 	id: string;
@@ -16,7 +14,10 @@ type UserPickQueryRow = {
 	outcome: PickOutcome;
 	points_awarded: number;
 	team_season_wins_at_pick?: number;
+	is_missed: boolean;
+	is_commissioner_override: boolean;
 	nfl_teams: { abbreviation: string; name: string } | { abbreviation: string; name: string }[] | null;
+	nfl_games: { kickoff_at: string } | { kickoff_at: string }[] | null;
 };
 
 function firstRelation<T>(value: T | T[] | null): T | null {
@@ -26,7 +27,8 @@ function firstRelation<T>(value: T | T[] | null): T | null {
 
 function mapUserPickRow(row: UserPickQueryRow): UserLeaguePick | null {
 	const team = firstRelation(row.nfl_teams);
-	if (!team) return null;
+	const game = firstRelation(row.nfl_games);
+	if (!team || !game) return null;
 
 	return {
 		id: row.id,
@@ -41,7 +43,10 @@ function mapUserPickRow(row: UserPickQueryRow): UserLeaguePick | null {
 		is_underdog_at_pick: row.is_underdog_at_pick,
 		outcome: row.outcome,
 		points_awarded: row.points_awarded,
-		team_season_wins_at_pick: row.team_season_wins_at_pick ?? 0
+		team_season_wins_at_pick: row.team_season_wins_at_pick ?? 0,
+		kickoff_at: game.kickoff_at,
+		is_missed: row.is_missed,
+		is_commissioner_override: row.is_commissioner_override
 	};
 }
 
@@ -65,7 +70,10 @@ export async function fetchUserLeaguePicks(
 			outcome,
 			points_awarded,
 			team_season_wins_at_pick,
-			nfl_teams ( abbreviation, name )
+			is_missed,
+			is_commissioner_override,
+			nfl_teams ( abbreviation, name ),
+			nfl_games ( kickoff_at )
 		`
 		)
 		.eq('league_id', leagueId)

@@ -6,6 +6,7 @@
 	import { isAppAdmin } from '$lib/admin';
 	import DemoBanner from '$lib/components/pick/DemoBanner.svelte';
 	import WeekNavigator from '$lib/components/pick/WeekNavigator.svelte';
+	import PickReminderPanel from '$lib/components/league/PickReminderPanel.svelte';
 	import StandingsTable from '$lib/components/league/StandingsTable.svelte';
 	import PicksGrid from '$lib/components/league/PicksGrid.svelte';
 	import TeamLogo from '$lib/components/TeamLogo.svelte';
@@ -22,9 +23,11 @@
 		simulatedWeekLabel
 	} from '$lib/demo';
 	import { fetchWeekGames } from '$lib/games';
+	import { formatPickDeadline } from '$lib/gameKickoff';
+	import { getPickCtaState } from '$lib/leaguePickStatus';
 	import { adminKickLeagueMember, fetchLeague } from '$lib/leagues';
 	import { fetchLeaguePicks, fetchLeagueStandings } from '$lib/standings';
-	import { isDemoSeason } from '$lib/season';
+	import { getCurrentWeekFromDate, isDemoSeason } from '$lib/season';
 	import type { DemoState } from '$lib/types/demo';
 	import type { WeekGame } from '$lib/types/game';
 	import type { LeagueWithRole } from '$lib/types/league';
@@ -38,6 +41,8 @@
 	let picks = $state<LeaguePick[]>([]);
 	let demoState = $state<DemoState>({ enabled: false, simulatedWeek: 1, picks: {} });
 	let demoGamesByWeek = $state<Map<number, WeekGame[]>>(new Map());
+	let liveWeekGames = $state<WeekGame[]>([]);
+	let viewWeek = $state(1);
 	let loading = $state(true);
 	let error = $state<string | null>(null);
 	let copied = $state(false);
@@ -93,6 +98,23 @@
 		if (!isDemo || !demoState.enabled) return null;
 		return getLatestScoredPick(demoState, demoGamesByWeek);
 	});
+
+	const userCurrentWeekPick = $derived.by(() => {
+		const user = auth.user;
+		if (!user || isDemo) return undefined;
+		return picks.find(
+			(p) => p.user_id === user.id && p.week_number === viewWeek && !p.is_missed
+		);
+	});
+
+	const pickCta = $derived.by(() => {
+		if (isDemo || !league) return { kind: 'hidden' as const };
+		return getPickCtaState(viewWeek, liveWeekGames, userCurrentWeekPick);
+	});
+
+	function handleLiveWeekChange(week: number) {
+		viewWeek = week;
+	}
 
 	function refreshDemoState() {
 		const user = auth.user;
@@ -188,6 +210,12 @@
 				demoState = { enabled: false, simulatedWeek: 1, picks: {} };
 			} else {
 				league = leagueResult.league;
+				if (!isDemoSeason(leagueResult.league.season_year)) {
+					viewWeek = getCurrentWeekFromDate(
+						new Date(),
+						leagueResult.league.season_year
+					);
+				}
 				demoState = loadDemoState(id, user.id, leagueResult.league.season_year);
 				if (standingsResult.error) {
 					error = standingsResult.error;
@@ -203,6 +231,19 @@
 				}
 			}
 			loading = false;
+		});
+	});
+
+	$effect(() => {
+		const leagueData = league;
+		const week = viewWeek;
+		if (!leagueData || isDemoSeason(leagueData.season_year)) {
+			liveWeekGames = [];
+			return;
+		}
+
+		fetchWeekGames(leagueData.season_year, week).then((result) => {
+			liveWeekGames = result.games;
 		});
 	});
 
@@ -266,19 +307,19 @@
 		<h1 class="page-title">{league.name}</h1>
 		<p class="page-subtitle">{league.season_year} season</p>
 
-		<section class="card pick-cta">
-			<div class="pick-cta-row">
-				<div>
-					<h2 class="card-title">Your pick</h2>
-					<p class="muted">
-						{isDemo
-							? 'Preview picks with historical 2025 results.'
-							: 'Choose a team for this week’s games.'}
-					</p>
+		<nav class="league-nav" aria-label="League sections">
+			<a href="{base}/league/{league.id}/rules" class="league-nav-link">Rules</a>
+		</nav>
+
+		{#if isDemo}
+			<section class="card pick-cta">
+				<div class="pick-cta-row">
+					<div>
+						<h2 class="card-title">Your pick</h2>
+						<p class="muted">Preview picks with historical 2025 results.</p>
+					</div>
+					<a href="{base}/league/{league.id}/pick" class="btn btn-primary btn-sm">Make your pick</a>
 				</div>
-				<a href="{base}/league/{league.id}/pick" class="btn btn-primary btn-sm">Make your pick</a>
-			</div>
-			{#if isDemo}
 				<p class="demo-summary">
 					Viewing {simulatedWeekLabel(demoState.simulatedWeek)}
 					{#if latestDemoPick}
@@ -290,8 +331,39 @@
 						</span>
 					{/if}
 				</p>
-			{/if}
-		</section>
+			</section>
+		{:else if pickCta.kind === 'needs_pick'}
+			<section class="card pick-cta pick-cta-alert">
+				<div class="pick-cta-row">
+					<div>
+						<h2 class="card-title">Week {pickCta.week} · pick before {formatPickDeadline(pickCta.deadlineLabel)}</h2>
+						<p class="muted">You haven't submitted a pick for this week yet.</p>
+					</div>
+					<a href="{base}/league/{league.id}/pick" class="btn btn-primary btn-sm">Make your pick →</a>
+				</div>
+			</section>
+		{:else if pickCta.kind === 'submitted'}
+			<section class="card pick-cta pick-cta-done">
+				<div class="pick-cta-row">
+					<div>
+						<h2 class="card-title">Week {pickCta.week} pick saved ✓</h2>
+						<p class="muted">
+							{#if pickCta.changeable}
+								You can change your pick anytime before kickoff. It's hidden from others until
+								then.
+							{:else if pickCta.teamAbbreviation}
+								You picked <strong>{pickCta.teamAbbreviation}</strong>.
+							{:else}
+								Your pick is in for this week.
+							{/if}
+						</p>
+					</div>
+					{#if pickCta.changeable}
+						<a href="{base}/league/{league.id}/pick" class="btn btn-ghost btn-sm">Change pick</a>
+					{/if}
+				</div>
+			</section>
+		{/if}
 
 		{#if isDemo}
 			<section class="demo-travel-wrap">
@@ -306,6 +378,12 @@
 			</section>
 		{/if}
 
+		{#if !isDemo}
+			<section class="live-week-wrap">
+				<WeekNavigator viewWeek={viewWeek} onWeekChange={handleLiveWeekChange} label="View week" />
+			</section>
+		{/if}
+
 		{#if league.is_commissioner}
 			<section class="card commissioner-tools">
 				<div class="commissioner-tools-row">
@@ -315,6 +393,14 @@
 					</div>
 					<a href="{base}/league/{league.id}/admin" class="btn btn-ghost btn-sm">Admin tools</a>
 				</div>
+				{#if !isDemo}
+					<PickReminderPanel
+						weekNumber={viewWeek}
+						standings={leagueView.standings}
+						picks={leagueView.picks}
+						games={liveWeekGames}
+					/>
+				{/if}
 			</section>
 
 			<section class="card">
@@ -363,11 +449,22 @@
 
 		<section class="card">
 			<h2 class="card-title">Weekly picks</h2>
-			<p class="muted">Green = win, gray = loss, amber = tie. Gold badge "2" = underdawg win.</p>
+			<p class="muted">
+				{#if isDemo}
+					Green = win, gray = loss, amber = tie. Gold badge "2" = underdawg win.
+				{:else}
+					Viewing Week {viewWeek}. Green = win, gray = loss, amber = tie.
+				{/if}
+			</p>
 			{#if leagueView.picks.length === 0}
 				<p class="muted">No picks yet.</p>
 			{:else}
-				<PicksGrid picks={leagueView.picks} standings={leagueView.standings} />
+				<PicksGrid
+					picks={leagueView.picks}
+					standings={leagueView.standings}
+					currentUserId={auth.user?.id ?? null}
+					viewWeek={isDemo ? null : viewWeek}
+				/>
 			{/if}
 		</section>
 	{/if}
@@ -432,6 +529,35 @@
 		align-items: flex-start;
 		justify-content: space-between;
 		gap: 1rem;
+	}
+
+	.league-nav {
+		display: flex;
+		gap: 0.75rem;
+		margin-top: 0.5rem;
+	}
+
+	.league-nav-link {
+		font-size: 0.9rem;
+		color: var(--link);
+		text-decoration: none;
+	}
+
+	.league-nav-link:hover {
+		text-decoration: underline;
+	}
+
+	.pick-cta-alert {
+		border-color: rgba(94, 224, 109, 0.35);
+		background: rgba(94, 224, 109, 0.06);
+	}
+
+	.pick-cta-done {
+		border-color: var(--border);
+	}
+
+	.live-week-wrap {
+		margin-top: 1.25rem;
 	}
 
 	.demo-summary {

@@ -2,7 +2,7 @@
 	import TeamLogo from '$lib/components/TeamLogo.svelte';
 	import GameKickoffInfo from '$lib/components/pick/GameKickoffInfo.svelte';
 	import WinPctBar from '$lib/components/pick/WinPctBar.svelte';
-	import { getTeamName } from '$lib/data/nflTeams';
+	import { getTeamName, getTeamSurfaceTint } from '$lib/data/nflTeams';
 	import { getGameKickoffInfo } from '$lib/gameKickoff';
 	import { isUnderdog } from '$lib/demo';
 	import type { WeekGame } from '$lib/types/game';
@@ -75,6 +75,8 @@
 			type="button"
 			class="team-side away {teamState(game.away.id)}"
 			class:is-picked={selectedTeamId === game.away.id}
+			data-team-id={game.away.id}
+			style:--team-tint={getTeamSurfaceTint(game.away.id)}
 			disabled={teamState(game.away.id) === 'locked'}
 			title={teamTitle(game.away.id)}
 			onclick={() => handleSelect(game.away.id)}
@@ -101,6 +103,8 @@
 			type="button"
 			class="team-side home {teamState(game.home.id)}"
 			class:is-picked={selectedTeamId === game.home.id}
+			data-team-id={game.home.id}
+			style:--team-tint={getTeamSurfaceTint(game.home.id)}
 			disabled={teamState(game.home.id) === 'locked'}
 			title={teamTitle(game.home.id)}
 			onclick={() => handleSelect(game.home.id)}

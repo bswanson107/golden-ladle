@@ -260,9 +260,9 @@
 </script>
 
 <main class="page page-admin">
-	<p class="back-link">
-		<a href="{base}/league/{leagueId}">← Back to league</a>
-	</p>
+	<div class="back-nav">
+		<a href="{base}/league/{leagueId}" class="btn btn-ghost btn-sm">← Back to league</a>
+	</div>
 
 	{#if auth.loading || loading}
 		<p class="muted">Loading commissioner tools…</p>
@@ -552,21 +552,23 @@
 	.sync-error {
 		margin: 0.85rem 0 0;
 		padding: 0.65rem 0.75rem;
-		border-radius: 8px;
-		background: rgba(255, 100, 100, 0.1);
-		border: 1px solid rgba(255, 100, 100, 0.35);
-		color: #e89898;
+		border-radius: var(--radius);
+		background: var(--danger-muted);
+		border: none;
+		color: var(--danger);
 		font-size: 0.9rem;
+		box-shadow: var(--shadow-sm);
 	}
 
 	.action-ok {
 		margin: 0 0 1rem;
 		padding: 0.65rem 0.75rem;
-		border-radius: 8px;
-		background: rgba(100, 200, 120, 0.1);
-		border: 1px solid rgba(100, 200, 120, 0.35);
-		color: #8fd4a0;
+		border-radius: var(--radius);
+		background: var(--win-muted);
+		border: none;
+		color: var(--win-bg);
 		font-size: 0.9rem;
+		box-shadow: var(--shadow-sm);
 	}
 
 	.panel-empty {
@@ -601,11 +603,11 @@
 	}
 
 	.row-missed {
-		background: rgba(255, 100, 100, 0.05);
+		background: var(--loss-muted);
 	}
 
 	.row-override {
-		background: rgba(255, 200, 80, 0.06);
+		background: var(--brand-muted);
 	}
 
 	.team-cell {

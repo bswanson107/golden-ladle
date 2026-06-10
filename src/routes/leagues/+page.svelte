@@ -92,9 +92,10 @@
 
 	.empty-card {
 		padding: 1.25rem;
-		border: 1px dashed var(--border);
-		border-radius: 12px;
-		background: var(--bg-elevated);
+		border: none;
+		border-radius: var(--radius);
+		background: var(--surface);
+		box-shadow: var(--shadow-sm);
 	}
 
 	.empty-card p {
@@ -116,16 +117,19 @@
 		justify-content: space-between;
 		gap: 1rem;
 		padding: 1rem 1.1rem;
-		border: 1px solid var(--border);
-		border-radius: 12px;
-		background: var(--bg-elevated);
+		border: none;
+		border-radius: var(--radius);
+		background: var(--surface);
+		box-shadow: var(--shadow-sm);
 		text-decoration: none;
 		color: inherit;
-		transition: border-color 0.15s;
+		transition:
+			transform 0.08s ease,
+			box-shadow 0.08s ease;
 	}
 
 	.league-card:hover {
-		border-color: var(--accent);
+		box-shadow: var(--shadow);
 	}
 
 	.league-card-main {
@@ -148,9 +152,14 @@
 		font-size: 0.75rem;
 		font-weight: 600;
 		padding: 0.25rem 0.5rem;
-		border-radius: 6px;
-		background: rgba(94, 224, 109, 0.15);
-		color: var(--accent);
+		border-radius: var(--radius);
+		background: var(--brand-muted);
+		color: var(--brand);
 		white-space: nowrap;
+		box-shadow: var(--shadow-sm);
+	}
+
+	:global([data-theme='light']) .badge {
+		color: var(--text);
 	}
 </style>

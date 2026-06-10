@@ -32,9 +32,9 @@
 </script>
 
 <main class="page page-rules">
-	<p class="back-link">
-		<a href="{base}/league/{leagueId}">← Back to league</a>
-	</p>
+	<div class="back-nav">
+		<a href="{base}/league/{leagueId}" class="btn btn-ghost btn-sm">← Back to league</a>
+	</div>
 
 	{#if auth.loading || loading}
 		<p class="muted">Loading rules…</p>
@@ -122,11 +122,6 @@
 		max-width: 40rem;
 	}
 
-	.back-link {
-		margin: 0 0 1rem;
-		font-size: 0.9rem;
-	}
-
 	.muted {
 		color: var(--text-muted);
 		font-size: 0.9rem;
@@ -135,9 +130,10 @@
 	.card {
 		margin-top: 1rem;
 		padding: 1.1rem 1.25rem;
-		border: 1px solid var(--border);
-		border-radius: 12px;
-		background: var(--bg-elevated);
+		border: none;
+		border-radius: var(--radius);
+		background: var(--surface);
+		box-shadow: var(--shadow-sm);
 	}
 
 	.card p {

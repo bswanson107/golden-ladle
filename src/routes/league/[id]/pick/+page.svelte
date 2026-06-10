@@ -147,9 +147,9 @@
 </script>
 
 <main class="page page-pick">
-	<p class="back-link">
-		<a href="{base}/league/{leagueId}">← Back to league</a>
-	</p>
+	<div class="back-nav">
+		<a href="{base}/league/{leagueId}" class="btn btn-ghost btn-sm">← Back to league</a>
+	</div>
 
 	{#if auth.loading || loading}
 		<p class="muted">Loading…</p>
@@ -189,11 +189,6 @@
 <style>
 	.page-pick {
 		max-width: 40rem;
-	}
-
-	.back-link {
-		margin: 0 0 1rem;
-		font-size: 0.9rem;
 	}
 
 	.muted {

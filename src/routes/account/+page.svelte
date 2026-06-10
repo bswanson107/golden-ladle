@@ -58,9 +58,9 @@
 </script>
 
 <main class="page page-account">
-	<p class="back-link">
-		<a href="{base}/leagues">← My leagues</a>
-	</p>
+	<div class="back-nav">
+		<a href="{base}/leagues" class="btn btn-ghost btn-sm">← My leagues</a>
+	</div>
 
 	<h1 class="page-title">Account</h1>
 	<p class="page-subtitle">How your name appears in standings and the picks grid.</p>
@@ -106,11 +106,6 @@
 		max-width: 28rem;
 	}
 
-	.back-link {
-		margin: 0 0 1rem;
-		font-size: 0.9rem;
-	}
-
 	.muted {
 		color: var(--text-muted);
 		font-size: 0.9rem;
@@ -119,9 +114,10 @@
 	.card {
 		margin-top: 1.25rem;
 		padding: 1.1rem 1.25rem;
-		border: 1px solid var(--border);
-		border-radius: 12px;
-		background: var(--bg-elevated);
+		border: none;
+		border-radius: var(--radius);
+		background: var(--surface);
+		box-shadow: var(--shadow-sm);
 	}
 
 	.account-form {
@@ -138,25 +134,28 @@
 
 	.account-form input {
 		padding: 0.55rem 0.65rem;
-		border: 1px solid var(--border);
-		border-radius: 8px;
-		background: var(--bg);
+		border: none;
+		border-radius: var(--radius);
+		background: var(--input-bg);
 		color: var(--text);
 		font-size: 1rem;
-	}
-
-	.hint {
-		margin: 0;
+		font-family: var(--font-body);
+		box-shadow: var(--shadow-sm);
 	}
 
 	.success {
 		margin: 0;
 		padding: 0.5rem 0.65rem;
-		border-radius: 8px;
-		background: rgba(100, 200, 120, 0.1);
-		border: 1px solid rgba(100, 200, 120, 0.35);
-		color: #8fd4a0;
+		border-radius: var(--radius);
+		background: var(--win-muted);
+		border: none;
+		color: var(--win-bg);
 		font-size: 0.9rem;
+		box-shadow: var(--shadow-sm);
+	}
+
+	.hint {
+		margin: 0;
 	}
 
 	.email-note {

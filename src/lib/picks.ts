@@ -144,10 +144,12 @@ export function teamUsageByWeek(
 	picks: Map<number, { team_id: string }>,
 	excludeWeek?: number
 ): Map<string, number> {
+	const exclude = excludeWeek !== undefined ? Number(excludeWeek) : undefined;
 	const usage = new Map<string, number>();
 	for (const [week, pick] of picks) {
-		if (excludeWeek !== undefined && week === excludeWeek) continue;
-		usage.set(pick.team_id, week);
+		const weekNum = Number(week);
+		if (exclude !== undefined && weekNum === exclude) continue;
+		usage.set(pick.team_id, weekNum);
 	}
 	return usage;
 }

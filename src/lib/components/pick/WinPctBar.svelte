@@ -29,13 +29,14 @@
 </script>
 
 <div class="win-pct">
-	<div class="win-pct-header">
-		<span class="win-pct-label">Win %</span>
-		<span class="win-pct-values">
-			<span class="away-value">{formatWinPct(awayWinPct)}</span>
-			<span class="sep">·</span>
-			<span class="home-value">{formatWinPct(homeWinPct)}</span>
-		</span>
+	<div class="win-pct-values" aria-hidden="true">
+		<div class="value-segment away" style:flex-grow={split.away}>
+			<span class="pct away-pct">{formatWinPct(awayWinPct)}</span>
+		</div>
+		<div class="split-gap"></div>
+		<div class="value-segment home" style:flex-grow={split.home}>
+			<span class="pct home-pct">{formatWinPct(homeWinPct)}</span>
+		</div>
 	</div>
 
 	<div class="win-pct-track" aria-hidden="true">
@@ -51,40 +52,67 @@
 			style:background={homeGradient}
 		></div>
 	</div>
+
+	<p class="win-pct-label">Win %</p>
 </div>
 
 <style>
 	.win-pct {
 		display: flex;
 		flex-direction: column;
-		gap: 0.4rem;
-	}
-
-	.win-pct-header {
-		display: flex;
-		align-items: baseline;
-		justify-content: space-between;
-		gap: 0.5rem;
+		gap: 0.25rem;
 	}
 
 	.win-pct-label {
+		margin: 0.1rem 0 0;
 		font-size: 0.72rem;
 		font-weight: 700;
 		text-transform: uppercase;
 		letter-spacing: 0.06em;
 		color: var(--text-muted);
+		text-align: center;
 	}
 
 	.win-pct-values {
+		display: flex;
+		align-items: baseline;
+		min-height: 1rem;
+	}
+
+	.value-segment {
+		flex: 1 1 0;
+		min-width: 0;
+		display: flex;
+		align-items: baseline;
+	}
+
+	.value-segment.away {
+		justify-content: flex-end;
+	}
+
+	.value-segment.home {
+		justify-content: flex-start;
+	}
+
+	.split-gap {
+		flex-shrink: 0;
+		width: 4px;
+	}
+
+	.pct {
 		font-size: 0.78rem;
 		font-weight: 600;
 		font-variant-numeric: tabular-nums;
 		color: var(--text-muted);
+		line-height: 1;
 	}
 
-	.sep {
-		margin: 0 0.2rem;
-		opacity: 0.55;
+	.away-pct {
+		padding-right: 0.3rem;
+	}
+
+	.home-pct {
+		padding-left: 0.5rem;
 	}
 
 	.win-pct-track {
@@ -108,10 +136,7 @@
 	.divider {
 		flex-shrink: 0;
 		width: 4px;
-		background: rgba(12, 14, 18, 0.92);
-		box-shadow:
-			-1px 0 0 rgba(255, 255, 255, 0.08),
-			1px 0 0 rgba(255, 255, 255, 0.08);
+		background: var(--shadow-color);
 		z-index: 1;
 	}
 </style>

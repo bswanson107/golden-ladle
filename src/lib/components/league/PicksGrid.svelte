@@ -16,6 +16,8 @@
 		viewWeek?: number | null;
 	} = $props();
 
+	const LOGO_SIZE = 24;
+
 	const now = Date.now();
 
 	const rankByUser = $derived(new Map(standings.map((s) => [s.user_id, s.standing_rank])));
@@ -53,17 +55,22 @@
 			});
 	});
 
-	function outcomeClass(outcome: PickOutcome): string {
+	function ringClass(outcome: PickOutcome, display: CellDisplay): string {
+		if (display === 'missed') return 'ring-missed';
+		if (display === 'hidden') return 'ring-hidden';
+		if (display === 'empty') return 'ring-empty';
+
 		switch (outcome) {
 			case 'win':
-				return 'win';
+				return 'ring-win';
 			case 'loss':
-			case 'missed':
-				return 'loss';
+				return 'ring-loss';
 			case 'tie':
-				return 'tie';
+				return 'ring-tie';
+			case 'missed':
+				return 'ring-missed';
 			default:
-				return 'pending';
+				return 'ring-pending';
 		}
 	}
 
@@ -85,7 +92,7 @@
 			<tr>
 				<th scope="col" class="sticky player-col">Player</th>
 				{#each weeks as week (week)}
-					<th scope="col" class="week-col">Wk {week}</th>
+					<th scope="col" class="week-col">{week}</th>
 				{/each}
 			</tr>
 		</thead>
@@ -96,26 +103,33 @@
 					{#each weeks as week (week)}
 						{@const pick = player.picks.get(week)}
 						{@const display = cellDisplay(pick, player.userId)}
-						<td
-							class="pick-cell {pick && display === 'visible'
-								? outcomeClass(pick.outcome)
-								: display}"
-						>
+						<td class="pick-cell">
 							{#if display === 'hidden'}
-								<span class="hidden-pick" title="Pick saved — hidden from others until kickoff">🔒</span>
-							{:else if display === 'missed'}
-								<span class="missed-label" title="Missed pick">missed</span>
-							{:else if display === 'visible' && pick}
-								<span class="team-pick">
-									<TeamLogo teamCode={pick.team_id} size={24} tile={false} />
-									<span class="team">{pick.team_abbreviation}</span>
+								<span
+									class="pick-ring ring-hidden"
+									title="Pick saved — hidden from others until kickoff"
+								>
+									<span class="ring-icon" aria-hidden="true">🔒</span>
 								</span>
-								{#if pick.outcome === 'win' && pick.is_underdog_at_pick}
-									<span class="underdawg" title="Underdawg win (2 pts)">2</span>
-								{/if}
-								{#if pick.is_commissioner_override}
-									<span class="override-badge" title="Commissioner override">✎</span>
-								{/if}
+							{:else if display === 'missed'}
+								<span class="pick-ring ring-missed" title="Missed pick">
+									<span class="ring-icon ring-icon-missed" aria-hidden="true">×</span>
+								</span>
+							{:else if display === 'visible' && pick}
+								<span
+									class="pick-ring {ringClass(pick.outcome, display)}"
+									title="{pick.team_abbreviation}{pick.outcome === 'win' && pick.is_underdog_at_pick
+										? ' · Underdawg (2 pts)'
+										: ''}{pick.is_commissioner_override ? ' · Commissioner override' : ''}"
+								>
+									<TeamLogo teamCode={pick.team_id} size={LOGO_SIZE} tile={false} />
+									{#if pick.outcome === 'win' && pick.is_underdog_at_pick}
+										<span class="chip-badge underdawg" title="Underdawg win (2 pts)">2</span>
+									{/if}
+									{#if pick.is_commissioner_override}
+										<span class="chip-badge override" title="Commissioner override">✎</span>
+									{/if}
+								</span>
 							{/if}
 						</td>
 					{/each}
@@ -126,50 +140,49 @@
 </div>
 
 <p class="grid-legend muted">
-	🔒 = your pick saved (hidden from others until kickoff) · empty = no pick yet ·
-	<span class="missed-label inline">missed</span> = no pick before deadline
+	<span class="legend-ring ring-win"></span> win ·
+	<span class="legend-ring ring-loss"></span> loss ·
+	<span class="legend-ring ring-tie"></span> tie ·
+	<span class="legend-ring ring-pending"></span> pending ·
+	<span class="legend-ring ring-hidden"><span class="legend-lock">🔒</span></span> hidden pick ·
+	<span class="legend-ring ring-missed"><span class="legend-missed">×</span></span> missed
 </p>
 
 <style>
 	.grid-wrap {
 		overflow-x: auto;
 		max-width: 100%;
-		border: 1px solid var(--border);
-		border-radius: 8px;
 	}
 
 	.picks-grid {
-		border-collapse: collapse;
+		border-collapse: separate;
+		border-spacing: 0;
 		font-size: 0.8rem;
 		min-width: max-content;
+		width: 100%;
 	}
 
 	th,
 	td {
-		padding: 0.45rem 0.5rem;
-		border-bottom: 1px solid var(--border);
-		border-right: 1px solid var(--border);
+		padding: 0.35rem;
+		border: none;
+		background: transparent;
 		text-align: center;
-		white-space: nowrap;
-	}
-
-	th:last-child,
-	td:last-child {
-		border-right: none;
+		vertical-align: middle;
 	}
 
 	thead th {
-		background: var(--bg-elevated);
 		color: var(--text-muted);
 		font-weight: 600;
 		font-size: 0.7rem;
+		padding-bottom: 0.5rem;
 	}
 
 	.sticky {
 		position: sticky;
 		left: 0;
 		z-index: 1;
-		background: var(--bg-elevated);
+		background: var(--surface);
 	}
 
 	.player-col {
@@ -178,92 +191,151 @@
 		max-width: 8rem;
 		font-weight: 500;
 		color: var(--text);
+		padding-right: 0.65rem;
+		background: var(--surface);
 	}
 
 	.week-col {
-		min-width: 3rem;
+		width: 2.75rem;
+		min-width: 2.75rem;
 	}
 
 	.pick-cell {
-		font-variant-numeric: tabular-nums;
+		width: 2.75rem;
+		min-width: 2.75rem;
+		height: 2.75rem;
+		padding: 0.2rem;
 	}
 
-	.team-pick {
+	.pick-ring {
+		position: relative;
 		display: inline-flex;
 		align-items: center;
-		gap: 0.25rem;
-		vertical-align: middle;
+		justify-content: center;
+		width: 2.25rem;
+		height: 2.25rem;
+		border-radius: 50%;
+		background: #ffffff;
+		border: 3px solid var(--ring-pending);
+		box-sizing: border-box;
+		flex-shrink: 0;
 	}
 
-	.pick-cell.win {
-		background: rgba(94, 224, 109, 0.12);
-		color: var(--accent);
+	.ring-win {
+		border-color: var(--ring-win);
 	}
 
-	.pick-cell.win .team {
-		font-weight: 700;
+	.ring-loss {
+		border-color: var(--ring-loss);
 	}
 
-	.pick-cell.loss,
-	.pick-cell.missed {
-		color: var(--text-muted);
+	.ring-tie {
+		border-color: var(--ring-tie);
 	}
 
-	.pick-cell.tie {
-		background: rgba(255, 193, 7, 0.1);
-		color: #e6b800;
+	.ring-pending {
+		border-color: var(--ring-pending);
 	}
 
-	.pick-cell.pending {
-		color: var(--text-muted);
+	.ring-missed {
+		border-color: var(--ring-loss);
 	}
 
-	.pick-cell.hidden,
-	.pick-cell.locked {
-		color: var(--text-muted);
+	.ring-hidden {
+		border-color: var(--ring-pending);
 	}
 
-	.hidden-pick {
+	.ring-icon {
 		font-size: 0.85rem;
-		opacity: 0.85;
+		line-height: 1;
 	}
 
-	.missed-label {
-		font-size: 0.68rem;
-		font-weight: 600;
-		text-transform: uppercase;
-		letter-spacing: 0.03em;
-		color: #c97878;
-	}
-
-	.missed-label.inline {
-		font-size: inherit;
-		text-transform: none;
-		letter-spacing: normal;
-	}
-
-	.underdawg {
-		display: inline-block;
-		margin-left: 0.15rem;
-		font-size: 0.65rem;
+	.ring-icon-missed {
+		font-size: 1.1rem;
 		font-weight: 700;
-		padding: 0.05rem 0.25rem;
-		border-radius: 4px;
-		background: var(--underdog-bg);
-		color: var(--underdog);
-		vertical-align: super;
+		color: var(--ring-loss);
 	}
 
-	.override-badge {
-		margin-left: 0.15rem;
-		font-size: 0.7rem;
-		color: #d4a843;
-		vertical-align: super;
+	.chip-badge {
+		position: absolute;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		min-width: 0.85rem;
+		height: 0.85rem;
+		padding: 0 0.15rem;
+		border-radius: var(--radius);
+		font-size: 0.55rem;
+		font-weight: 800;
+		line-height: 1;
+		box-shadow: var(--shadow-sm);
+	}
+
+	.chip-badge.underdawg {
+		top: -0.15rem;
+		right: -0.2rem;
+		background: var(--brand);
+		color: var(--brand-text);
+	}
+
+	.chip-badge.override {
+		bottom: -0.15rem;
+		right: -0.2rem;
+		background: var(--surface-2);
+		color: var(--text-muted);
+		font-size: 0.6rem;
 	}
 
 	.grid-legend {
-		margin: 0.65rem 0 0;
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.35rem 0.65rem;
+		margin: 0.75rem 0 0;
 		font-size: 0.78rem;
 		line-height: 1.4;
+	}
+
+	.legend-ring {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 0.85rem;
+		height: 0.85rem;
+		border-radius: 50%;
+		background: #ffffff;
+		border: 2px solid var(--ring-pending);
+		vertical-align: middle;
+		margin-right: 0.15rem;
+	}
+
+	.legend-ring.ring-win {
+		border-color: var(--ring-win);
+	}
+
+	.legend-ring.ring-loss,
+	.legend-ring.ring-missed {
+		border-color: var(--ring-loss);
+	}
+
+	.legend-ring.ring-tie {
+		border-color: var(--ring-tie);
+	}
+
+	.legend-ring.ring-pending,
+	.legend-ring.ring-hidden {
+		border-color: var(--ring-pending);
+	}
+
+	.legend-lock {
+		font-size: 0.45rem;
+		line-height: 1;
+	}
+
+	.legend-missed {
+		font-size: 0.55rem;
+		font-weight: 700;
+		color: var(--ring-loss);
+		line-height: 1;
 	}
 </style>

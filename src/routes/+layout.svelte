@@ -10,6 +10,7 @@
 	import { AUTH_CONTEXT_KEY, ADMIN_CONTEXT_KEY, type AuthStore, type AdminStore } from '$lib/auth';
 	import { getSupabase } from '$lib/supabase';
 	import { isAppAdmin, loadAdminMode, saveAdminMode } from '$lib/admin';
+	import { getTheme, initTheme, toggleTheme } from '$lib/themeStore.svelte';
 
 	let { children } = $props();
 
@@ -50,6 +51,7 @@
 	const publicRoutes = new Set(['/', '/login', '/signup', '/design']);
 
 	onMount(() => {
+		initTheme();
 		adminModeEnabled = loadAdminMode();
 
 		const supabase = getSupabase();
@@ -95,10 +97,13 @@
 </svelte:head>
 
 <div class="app">
-	<header class="header">
+	<header class="header chrome-bar">
 		<a href="{base}/" class="brand">Golden Ladle</a>
 
 		<nav class="nav">
+			<button type="button" class="theme-toggle btn btn-ghost btn-sm" onclick={toggleTheme}>
+				{getTheme() === 'dark' ? '☀ Light' : '☾ Dark'}
+			</button>
 			{#if auth.loading}
 				<span class="nav-muted">…</span>
 			{:else if auth.user}
@@ -142,28 +147,36 @@
 		min-height: 100vh;
 		display: flex;
 		flex-direction: column;
+		--app-header-height: 3.25rem;
 	}
 
 	.header {
+		position: sticky;
+		top: 0;
+		z-index: 50;
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
 		gap: 1rem;
+		min-height: var(--app-header-height);
 		padding: 0.75rem 1rem;
-		border-bottom: 1px solid var(--border);
-		background: var(--bg-elevated);
 	}
 
 	.brand {
+		font-family: var(--font-display);
 		font-weight: 700;
-		color: var(--accent);
+		color: var(--brand);
 		text-decoration: none;
 		letter-spacing: -0.02em;
 	}
 
 	.brand:hover {
-		color: var(--accent);
-		filter: brightness(1.08);
+		color: var(--brand);
+		filter: brightness(1.05);
+	}
+
+	:global([data-theme='light']) .brand {
+		color: var(--text);
 	}
 
 	.nav {
@@ -209,11 +222,15 @@
 	.admin-toggle input {
 		width: 0.9rem;
 		height: 0.9rem;
-		accent-color: #e89898;
+		accent-color: var(--danger);
 	}
 
 	.admin-toggle:has(input:checked) {
-		color: #e89898;
+		color: var(--danger);
+	}
+
+	.theme-toggle {
+		font-family: var(--font-body);
 	}
 
 	.btn-sm {

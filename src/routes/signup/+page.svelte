@@ -120,9 +120,10 @@
 	.auth-message {
 		margin: 0;
 		padding: 0.65rem 0.75rem;
-		border-radius: 8px;
-		background: rgba(94, 224, 109, 0.12);
-		color: var(--accent);
+		border-radius: var(--radius);
+		background: var(--win-muted);
+		color: var(--win-bg);
 		font-size: 0.875rem;
+		box-shadow: var(--shadow-sm);
 	}
 </style>

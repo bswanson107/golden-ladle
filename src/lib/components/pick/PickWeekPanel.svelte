@@ -7,7 +7,6 @@
 		canPickWeek,
 		formatPoints,
 		formatWinPct,
-		getActivePickWeek,
 		outcomeLabel,
 		resultsVisibleForWeek,
 		scoreDemoPick
@@ -59,9 +58,7 @@
 	let lastSyncAt = $state<string | null>(null);
 	let syncNotice = $state<string | null>(null);
 
-	const activeWeek = $derived(
-		mode === 'demo' && demoState ? getActivePickWeek(demoState.simulatedWeek) : viewWeek
-	);
+	const activeWeek = $derived(viewWeek);
 
 	const demoCurrentPick = $derived(
 		mode === 'demo' && demoState ? (demoState.picks[activeWeek] ?? null) : null
@@ -100,11 +97,7 @@
 		return game?.status === 'final';
 	});
 
-	const displayTeamId = $derived(
-		pickSubmitted && mode === 'demo'
-			? (currentPick?.team_id ?? null)
-			: (pendingPick?.team_id ?? currentPick?.team_id ?? null)
-	);
+	const displayTeamId = $derived(pendingPick?.team_id ?? currentPick?.team_id ?? null);
 
 	const showSubmitButton = $derived(
 		pickingEnabled && games.length > 0 && !(mode === 'live' && liveCurrentPick !== null)
@@ -115,9 +108,9 @@
 			const picksMap = new Map(
 				Object.entries(demoState.picks).map(([week, pick]) => [Number(week), pick])
 			);
-			return teamUsageByWeek(picksMap, activeWeek);
+			return teamUsageByWeek(picksMap, viewWeek);
 		}
-		return teamUsageByWeek(userPicksByWeek, activeWeek);
+		return teamUsageByWeek(userPicksByWeek, viewWeek);
 	});
 
 	const priorWeek = $derived(activeWeek > 1 ? activeWeek - 1 : null);
@@ -376,7 +369,7 @@
 				{#if showSubmitButton}
 					<button
 						type="button"
-						class="submit-pick-btn"
+						class="btn btn-primary btn-sm submit-pick-btn"
 						disabled={!pendingPick || saving}
 						onclick={handleSubmitPick}
 					>
@@ -519,22 +512,23 @@
 	.error {
 		margin: 0;
 		padding: 0.65rem 0.75rem;
-		border-radius: 8px;
-		background: rgba(255, 90, 90, 0.12);
-		color: #ff8a8a;
+		border-radius: var(--radius);
+		background: var(--danger-muted);
+		color: var(--danger);
 		font-size: 0.875rem;
 	}
 
 	.pick-sticky-bar {
 		position: sticky;
-		top: 0;
-		z-index: 25;
+		top: var(--app-header-height, 3.25rem);
+		z-index: 40;
 		margin: 0 -1rem 1rem;
 		padding: 0.75rem 1rem 0.85rem;
-		border-bottom: 1px solid var(--border);
-		background: rgba(12, 14, 18, 0.94);
-		backdrop-filter: blur(10px);
-		box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+		background: var(--chrome-bg);
+		backdrop-filter: blur(8px);
+		-webkit-backdrop-filter: blur(8px);
+		border: none;
+		box-shadow: none;
 	}
 
 	.pick-toolbar {
@@ -543,8 +537,7 @@
 		justify-content: space-between;
 		gap: 0.65rem;
 		margin-top: 0.75rem;
-		padding-top: 0.75rem;
-		border-top: 1px solid var(--border);
+		padding-top: 0;
 	}
 
 	.pick-toolbar-loading {
@@ -594,13 +587,13 @@
 	}
 
 	.status-indicator.needed {
-		background: #fbbf24;
-		box-shadow: 0 0 0 3px rgba(251, 191, 36, 0.2);
+		background: var(--brand);
+		box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 25%, transparent);
 	}
 
 	.status-indicator.ready {
-		background: var(--accent);
-		box-shadow: 0 0 0 3px rgba(94, 224, 109, 0.2);
+		background: var(--brand);
+		box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 25%, transparent);
 	}
 
 	.status-indicator.locked {
@@ -629,8 +622,9 @@
 		text-transform: uppercase;
 		letter-spacing: 0.04em;
 		color: var(--text-muted);
-		background: rgba(255, 255, 255, 0.06);
-		border: 1px solid var(--border);
+		background: var(--surface-2);
+		border: none;
+		box-shadow: var(--shadow-sm);
 	}
 
 	.pick-scroll-content {
@@ -646,24 +640,29 @@
 
 	.result-banner {
 		margin: 0.85rem 0;
-		padding: 0.75rem 0.9rem;
-		border-radius: 8px;
-		border: 1px solid var(--border);
+		padding: 0.85rem 1rem;
+		border-radius: var(--radius);
+		border: none;
+		box-shadow: var(--shadow-sm);
+		font-size: 0.9rem;
+		font-weight: 600;
+		color: var(--text);
+		border-left: 3px solid transparent;
 	}
 
 	.result-banner.win {
-		border-color: rgba(94, 224, 109, 0.35);
-		background: rgba(94, 224, 109, 0.1);
+		background: color-mix(in srgb, var(--win-bg) 28%, var(--surface));
+		border-left-color: var(--win-bg);
 	}
 
 	.result-banner.loss {
-		border-color: rgba(255, 100, 100, 0.25);
-		background: rgba(255, 100, 100, 0.08);
+		background: color-mix(in srgb, var(--danger) 24%, var(--surface));
+		border-left-color: var(--danger);
 	}
 
 	.result-banner.tie {
-		border-color: rgba(255, 193, 7, 0.3);
-		background: rgba(255, 193, 7, 0.08);
+		background: color-mix(in srgb, var(--tie-bg) 28%, var(--surface));
+		border-left-color: var(--tie-bg);
 	}
 
 	.result-title {
@@ -690,36 +689,22 @@
 		margin-left: 0.35rem;
 		font-size: 0.8rem;
 		font-weight: 700;
-		color: var(--underdog);
+		color: var(--brand);
 	}
 
 	.submit-pick-btn {
 		flex-shrink: 0;
-		padding: 0.55rem 0.85rem;
-		border: none;
-		border-radius: 8px;
-		background: var(--accent);
-		color: #0c0e12;
-		font-size: 0.85rem;
-		font-weight: 700;
-		cursor: pointer;
-		transition: filter 0.15s, opacity 0.15s;
 		white-space: nowrap;
 	}
 
 	.submit-pick-btn:hover:not(:disabled) {
-		filter: brightness(1.08);
-	}
-
-	.submit-pick-btn:disabled {
-		opacity: 0.45;
-		cursor: not-allowed;
+		filter: brightness(1.05);
 	}
 
 	.games-list {
 		display: flex;
 		flex-direction: column;
-		gap: 0.65rem;
+		gap: 1rem;
 	}
 
 	.modal-backdrop {
@@ -736,10 +721,10 @@
 	.modal {
 		width: min(100%, 24rem);
 		padding: 1.1rem 1.2rem;
-		border: 1px solid var(--border);
-		border-radius: 12px;
-		background: var(--bg-elevated);
-		box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+		border: none;
+		border-radius: var(--radius);
+		background: var(--surface);
+		box-shadow: var(--shadow-lg);
 	}
 
 	.modal-title {
@@ -765,22 +750,24 @@
 	.btn-cancel,
 	.btn-confirm {
 		padding: 0.45rem 0.75rem;
-		border-radius: 8px;
+		border-radius: var(--radius);
 		font-size: 0.85rem;
 		font-weight: 600;
+		font-family: var(--font-body);
 		cursor: pointer;
+		box-shadow: var(--shadow-sm);
 	}
 
 	.btn-cancel {
-		border: 1px solid var(--border);
-		background: transparent;
+		border: none;
+		background: var(--surface-2);
 		color: var(--text-muted);
 	}
 
 	.btn-confirm {
 		border: none;
-		background: var(--accent);
-		color: #0c0e12;
+		background: var(--primary);
+		color: var(--primary-text);
 	}
 
 	.btn-confirm:disabled {

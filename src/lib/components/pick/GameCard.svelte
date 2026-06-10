@@ -3,7 +3,6 @@
 	import GameKickoffInfo from '$lib/components/pick/GameKickoffInfo.svelte';
 	import WinPctBar from '$lib/components/pick/WinPctBar.svelte';
 	import { getTeamName, getTeamSurfaceTint } from '$lib/data/nflTeams';
-	import { getGameKickoffInfo } from '$lib/gameKickoff';
 	import { isUnderdog } from '$lib/demo';
 	import type { WeekGame } from '$lib/types/game';
 
@@ -28,12 +27,12 @@
 	} = $props();
 
 	const logoSize = 92;
-	const kickoffInfo = $derived(getGameKickoffInfo(game.kickoff_at));
 
 	function teamState(teamId: string): 'selected' | 'selectable' | 'locked' | 'used-elsewhere' {
 		if (selectedTeamId === teamId) return pickingEnabled ? 'selectable' : 'selected';
 		if (!pickingEnabled) return 'locked';
-		if (teamUsageByWeek.has(teamId)) return 'used-elsewhere';
+		const usedWeek = teamUsageByWeek.get(teamId);
+		if (usedWeek !== undefined && usedWeek !== activeWeek) return 'used-elsewhere';
 		return 'selectable';
 	}
 
@@ -54,6 +53,16 @@
 		onSelectTeam?.(teamId);
 	}
 
+	function pickBadge(teamId: string): 'current' | 'other' | null {
+		if (selectedTeamId === teamId) return 'current';
+		if (teamUsageByWeek.has(teamId)) return 'other';
+		return null;
+	}
+
+	function pickBadgeOtherWeek(teamId: string): number | undefined {
+		return teamUsageByWeek.get(teamId);
+	}
+
 	function scoreLine(): string | null {
 		if (!showResults || game.status !== 'final') return null;
 		if (game.home_score === null || game.away_score === null) return null;
@@ -63,7 +72,7 @@
 	const resultLine = $derived(scoreLine());
 </script>
 
-<article class="game-card {kickoffInfo.highlightClass ?? ''}" class:has-result={resultLine !== null}>
+<article class="game-card" class:has-result={resultLine !== null}>
 	<GameKickoffInfo kickoffAt={game.kickoff_at} />
 
 	{#if resultLine}
@@ -81,6 +90,13 @@
 			title={teamTitle(game.away.id)}
 			onclick={() => handleSelect(game.away.id)}
 		>
+			{#if pickBadge(game.away.id) === 'current'}
+				<span class="pick-marker pick-marker-current">Your pick</span>
+			{:else if pickBadge(game.away.id) === 'other'}
+				<span class="pick-marker pick-marker-other"
+					>Picked WK {pickBadgeOtherWeek(game.away.id)}</span
+				>
+			{/if}
 			<span class="side-label">Away</span>
 			<div class="logo-wrap">
 				<TeamLogo teamCode={game.away.id} size={logoSize} />
@@ -89,12 +105,6 @@
 			<div class="badges">
 				{#if game.away_win_pct !== null && isUnderdog(game.away_win_pct, underdogThreshold)}
 					<span class="underdawg-badge">Underdawg · 2 pts</span>
-				{/if}
-				{#if teamUsageByWeek.has(game.away.id)}
-					<span class="used-note">Week {teamUsageByWeek.get(game.away.id)}</span>
-				{/if}
-				{#if selectedTeamId === game.away.id}
-					<span class="pick-marker">Your pick</span>
 				{/if}
 			</div>
 		</button>
@@ -109,6 +119,13 @@
 			title={teamTitle(game.home.id)}
 			onclick={() => handleSelect(game.home.id)}
 		>
+			{#if pickBadge(game.home.id) === 'current'}
+				<span class="pick-marker pick-marker-current">Your pick</span>
+			{:else if pickBadge(game.home.id) === 'other'}
+				<span class="pick-marker pick-marker-other"
+					>Picked WK {pickBadgeOtherWeek(game.home.id)}</span
+				>
+			{/if}
 			<span class="side-label">Home</span>
 			<div class="logo-wrap">
 				<TeamLogo teamCode={game.home.id} size={logoSize} />
@@ -117,12 +134,6 @@
 			<div class="badges">
 				{#if game.home_win_pct !== null && isUnderdog(game.home_win_pct, underdogThreshold)}
 					<span class="underdawg-badge">Underdawg · 2 pts</span>
-				{/if}
-				{#if teamUsageByWeek.has(game.home.id)}
-					<span class="used-note">Week {teamUsageByWeek.get(game.home.id)}</span>
-				{/if}
-				{#if selectedTeamId === game.home.id}
-					<span class="pick-marker">Your pick</span>
 				{/if}
 			</div>
 		</button>
@@ -142,57 +153,10 @@
 		flex-direction: column;
 		gap: 0.85rem;
 		padding: 1rem 1rem 1.1rem;
-		border: 1px solid var(--border);
-		border-radius: 12px;
-		background: var(--bg-elevated);
-	}
-
-	.game-card.has-result {
-		border-color: rgba(94, 224, 109, 0.25);
-	}
-
-	.game-card.slot-tnf {
-		border-color: rgba(0, 168, 225, 0.28);
-	}
-
-	.game-card.slot-snf {
-		border-color: rgba(212, 175, 55, 0.32);
-	}
-
-	.game-card.slot-mnf {
-		border-color: rgba(239, 68, 68, 0.28);
-	}
-
-	.game-card.slot-international {
-		border-color: rgba(52, 211, 153, 0.28);
-	}
-
-	.game-card.slot-season-opener {
-		border-color: rgba(168, 85, 247, 0.28);
-	}
-
-	.game-card.slot-thanksgiving-eve {
-		border-color: rgba(251, 146, 60, 0.28);
-	}
-
-	.game-card.slot-thanksgiving {
-		border-color: rgba(234, 88, 12, 0.32);
-	}
-
-	.game-card.slot-black-friday {
-		border-color: rgba(148, 163, 184, 0.32);
-	}
-
-	.game-card.slot-christmas-eve {
-		border-color: rgba(34, 197, 94, 0.28);
-	}
-
-	.game-card.slot-christmas {
-		border-color: rgba(220, 38, 38, 0.32);
-	}
-
-	.game-card.slot-saturday {
-		border-color: rgba(148, 163, 184, 0.28);
+		border: none;
+		border-radius: var(--radius);
+		background: var(--surface);
+		box-shadow: var(--shadow-lg);
 	}
 
 	.final-score {
@@ -211,6 +175,7 @@
 	}
 
 	.team-side {
+		position: relative;
 		display: flex;
 		flex-direction: column;
 		align-items: center;
@@ -218,39 +183,37 @@
 		gap: 0.55rem;
 		min-height: 11.5rem;
 		padding: 0.85rem 0.75rem 0.9rem;
-		border: 1px solid var(--border);
-		border-radius: 10px;
-		background: var(--bg);
+		border: none;
+		border-radius: var(--radius);
+		background: color-mix(in srgb, var(--team-tint, var(--text-muted)) 20%, var(--surface));
+		box-shadow: var(--shadow-sm);
 		color: var(--text);
 		text-align: center;
 		cursor: pointer;
 		transition:
-			border-color 0.15s,
-			background 0.15s,
-			box-shadow 0.15s;
+			background 0.15s ease,
+			box-shadow 0.15s ease,
+			transform 0.08s ease;
 	}
 
 	.team-side.selectable:hover,
 	.team-side.used-elsewhere:hover {
-		border-color: var(--accent);
-		background: rgba(94, 224, 109, 0.06);
+		background: color-mix(in srgb, var(--team-tint, var(--text-muted)) 30%, var(--surface));
 	}
 
-	.team-side.is-picked {
-		border-color: var(--accent);
-		background: rgba(94, 224, 109, 0.12);
-		box-shadow: 0 0 0 1px rgba(94, 224, 109, 0.2);
-	}
-
+	.team-side.is-picked,
 	.team-side.selected {
-		border-color: var(--accent);
-		background: rgba(94, 224, 109, 0.12);
-		box-shadow: 0 0 0 1px rgba(94, 224, 109, 0.2);
+		background: color-mix(
+			in srgb,
+			var(--brand-muted) 50%,
+			color-mix(in srgb, var(--team-tint, var(--text-muted)) 25%, var(--surface))
+		);
+		box-shadow: var(--shadow);
 	}
 
 	.team-side.used-elsewhere {
-		border-style: dashed;
-		border-color: rgba(126, 184, 255, 0.45);
+		border: 2px dotted var(--text-muted);
+		opacity: 0.92;
 	}
 
 	.team-side.locked {
@@ -296,23 +259,40 @@
 	.underdawg-badge {
 		font-size: 0.65rem;
 		font-weight: 700;
-		color: var(--underdog);
+		color: var(--brand-text);
 		padding: 0.1rem 0.35rem;
-		border-radius: 4px;
-		background: var(--underdog-bg);
-	}
-
-	.used-note {
-		font-size: 0.65rem;
-		font-weight: 600;
-		color: var(--link);
+		border-radius: var(--radius);
+		background: var(--brand);
+		box-shadow: var(--shadow-sm);
 	}
 
 	.pick-marker {
-		font-size: 0.65rem;
-		font-weight: 700;
-		color: var(--accent);
+		position: absolute;
+		top: 0.45rem;
+		right: 0.45rem;
+		z-index: 1;
+		font-size: 0.58rem;
+		font-weight: 800;
+		padding: 0.15rem 0.4rem;
+		border-radius: var(--radius);
+		box-shadow: var(--shadow-sm);
 		text-transform: uppercase;
 		letter-spacing: 0.04em;
+		line-height: 1.2;
+		pointer-events: none;
+	}
+
+	.pick-marker-current {
+		color: var(--win-text);
+		background: var(--win-bg);
+	}
+
+	.pick-marker-other {
+		color: #ffffff;
+		background: var(--tie-bg);
+	}
+
+	:global([data-theme='dark']) .pick-marker-other {
+		background: #3b82f6;
 	}
 </style>

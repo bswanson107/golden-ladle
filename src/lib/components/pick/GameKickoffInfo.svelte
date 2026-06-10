@@ -7,7 +7,7 @@
 </script>
 
 <div
-	class="kickoff {info.highlightClass ?? ''}"
+	class="kickoff"
 	class:highlighted={info.badges.length > 0}
 >
 	{#each info.badges as badge (badge.id)}
@@ -24,68 +24,13 @@
 		flex-wrap: wrap;
 		gap: 0.45rem;
 		padding: 0.45rem 0.65rem;
-		border-radius: 8px;
-		background: rgba(255, 255, 255, 0.02);
-		border: 1px solid transparent;
+		border-radius: var(--radius);
+		background: var(--surface);
+		border: none;
 	}
 
 	.kickoff.highlighted {
 		padding: 0.5rem 0.7rem;
-	}
-
-	.kickoff.slot-tnf {
-		border-color: rgba(0, 168, 225, 0.35);
-		background: rgba(0, 168, 225, 0.08);
-	}
-
-	.kickoff.slot-snf {
-		border-color: rgba(212, 175, 55, 0.4);
-		background: rgba(212, 175, 55, 0.08);
-	}
-
-	.kickoff.slot-mnf {
-		border-color: rgba(239, 68, 68, 0.35);
-		background: rgba(239, 68, 68, 0.08);
-	}
-
-	.kickoff.slot-international {
-		border-color: rgba(52, 211, 153, 0.35);
-		background: rgba(52, 211, 153, 0.08);
-	}
-
-	.kickoff.slot-season-opener {
-		border-color: rgba(168, 85, 247, 0.35);
-		background: rgba(168, 85, 247, 0.08);
-	}
-
-	.kickoff.slot-thanksgiving-eve {
-		border-color: rgba(251, 146, 60, 0.35);
-		background: rgba(251, 146, 60, 0.08);
-	}
-
-	.kickoff.slot-thanksgiving {
-		border-color: rgba(234, 88, 12, 0.4);
-		background: rgba(234, 88, 12, 0.1);
-	}
-
-	.kickoff.slot-black-friday {
-		border-color: rgba(30, 30, 30, 0.5);
-		background: rgba(255, 255, 255, 0.06);
-	}
-
-	.kickoff.slot-christmas-eve {
-		border-color: rgba(34, 197, 94, 0.35);
-		background: rgba(34, 197, 94, 0.08);
-	}
-
-	.kickoff.slot-christmas {
-		border-color: rgba(220, 38, 38, 0.4);
-		background: rgba(220, 38, 38, 0.1);
-	}
-
-	.kickoff.slot-saturday {
-		border-color: rgba(148, 163, 184, 0.35);
-		background: rgba(148, 163, 184, 0.08);
 	}
 
 	.kickoff-time {
@@ -103,12 +48,13 @@
 		display: inline-flex;
 		align-items: center;
 		padding: 0.18rem 0.5rem;
-		border-radius: 999px;
+		border-radius: var(--radius);
 		font-size: 0.68rem;
 		font-weight: 800;
 		letter-spacing: 0.05em;
 		text-transform: uppercase;
-		border: 1px solid transparent;
+		border: none;
+		box-shadow: var(--shadow-sm);
 	}
 
 	.slot-tnf {
@@ -175,5 +121,71 @@
 		color: #cbd5e1;
 		background: rgba(148, 163, 184, 0.16);
 		border-color: rgba(148, 163, 184, 0.45);
+	}
+
+	:global([data-theme='light']) .slot-tnf {
+		color: #fff;
+		background: #0369a1;
+		border-color: #0369a1;
+	}
+
+	:global([data-theme='light']) .slot-snf {
+		color: #1a1408;
+		background: #ca8a04;
+		border-color: #ca8a04;
+	}
+
+	:global([data-theme='light']) .slot-mnf {
+		color: #fff;
+		background: #dc2626;
+		border-color: #dc2626;
+	}
+
+	:global([data-theme='light']) .slot-international {
+		color: #fff;
+		background: #059669;
+		border-color: #059669;
+	}
+
+	:global([data-theme='light']) .slot-season-opener {
+		color: #fff;
+		background: #7c3aed;
+		border-color: #7c3aed;
+	}
+
+	:global([data-theme='light']) .slot-thanksgiving-eve {
+		color: #fff;
+		background: #ea580c;
+		border-color: #ea580c;
+	}
+
+	:global([data-theme='light']) .slot-thanksgiving {
+		color: #fff;
+		background: #c2410c;
+		border-color: #c2410c;
+	}
+
+	:global([data-theme='light']) .slot-black-friday {
+		color: #fff;
+		background: #334155;
+		border-color: #334155;
+	}
+
+	:global([data-theme='light']) .slot-christmas-eve {
+		color: #fff;
+		background: #15803d;
+		border-color: #15803d;
+	}
+
+	:global([data-theme='light']) .slot-christmas {
+		color: #fff;
+		background: #b91c1c;
+		border-color: #b91c1c;
+	}
+
+	:global([data-theme='light']) .slot-saturday {
+		color: #fff;
+		background: #64748b;
+		border-color: #64748b;
 	}
 </style>

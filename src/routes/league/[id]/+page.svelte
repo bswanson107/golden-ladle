@@ -291,9 +291,9 @@
 </script>
 
 <main class="page page-league">
-	<p class="back-link">
-		<a href="{base}/leagues">← My leagues</a>
-	</p>
+	<div class="back-nav">
+		<a href="{base}/leagues" class="btn btn-ghost btn-sm">← My leagues</a>
+	</div>
 
 	{#if auth.loading || loading}
 		<p class="muted">Loading league…</p>
@@ -308,7 +308,7 @@
 		<p class="page-subtitle">{league.season_year} season</p>
 
 		<nav class="league-nav" aria-label="League sections">
-			<a href="{base}/league/{league.id}/rules" class="league-nav-link">Rules</a>
+			<a href="{base}/league/{league.id}/rules" class="btn btn-ghost btn-sm">Rules</a>
 		</nav>
 
 		{#if isDemo}
@@ -333,7 +333,7 @@
 				</p>
 			</section>
 		{:else if pickCta.kind === 'needs_pick'}
-			<section class="card pick-cta pick-cta-alert">
+			<section class="alert alert-warn pick-cta">
 				<div class="pick-cta-row">
 					<div>
 						<h2 class="card-title">Week {pickCta.week} · pick before {formatPickDeadline(pickCta.deadlineLabel)}</h2>
@@ -343,7 +343,7 @@
 				</div>
 			</section>
 		{:else if pickCta.kind === 'submitted'}
-			<section class="card pick-cta pick-cta-done">
+			<section class="alert alert-success pick-cta">
 				<div class="pick-cta-row">
 					<div>
 						<h2 class="card-title">Week {pickCta.week} pick saved ✓</h2>
@@ -475,11 +475,6 @@
 		max-width: 56rem;
 	}
 
-	.back-link {
-		margin: 0 0 1rem;
-		font-size: 0.9rem;
-	}
-
 	.muted {
 		color: var(--text-muted);
 		font-size: 0.9rem;
@@ -489,9 +484,10 @@
 	.card {
 		margin-top: 1.25rem;
 		padding: 1.1rem 1.25rem;
-		border: 1px solid var(--border);
-		border-radius: 12px;
-		background: var(--bg-elevated);
+		border: none;
+		border-radius: var(--radius);
+		background: var(--surface);
+		box-shadow: var(--shadow-sm);
 	}
 
 	.card-title {
@@ -511,10 +507,15 @@
 		font-size: 1.25rem;
 		font-weight: 700;
 		letter-spacing: 0.08em;
-		color: var(--accent);
+		color: var(--brand);
 		padding: 0.5rem 0.75rem;
-		border-radius: 8px;
-		background: rgba(94, 224, 109, 0.1);
+		border-radius: var(--radius);
+		background: var(--brand-muted);
+		box-shadow: var(--shadow-sm);
+	}
+
+	:global([data-theme='light']) .invite-code {
+		color: var(--text);
 	}
 
 	.pick-cta-row {
@@ -537,23 +538,8 @@
 		margin-top: 0.5rem;
 	}
 
-	.league-nav-link {
-		font-size: 0.9rem;
-		color: var(--link);
-		text-decoration: none;
-	}
-
-	.league-nav-link:hover {
-		text-decoration: underline;
-	}
-
-	.pick-cta-alert {
-		border-color: rgba(94, 224, 109, 0.35);
-		background: rgba(94, 224, 109, 0.06);
-	}
-
-	.pick-cta-done {
-		border-color: var(--border);
+	.pick-cta {
+		margin-top: 1.25rem;
 	}
 
 	.live-week-wrap {

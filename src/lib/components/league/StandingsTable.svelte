@@ -141,19 +141,19 @@
 		width: 1.35rem;
 		height: 1.35rem;
 		padding: 0;
-		border: 1px solid rgba(255, 100, 100, 0.4);
+		border: none;
 		border-radius: 999px;
-		background: rgba(255, 100, 100, 0.1);
-		color: #e89898;
+		background: color-mix(in srgb, var(--danger) 12%, var(--surface));
+		color: var(--danger);
 		font-size: 1rem;
 		line-height: 1;
 		font-weight: 700;
 		cursor: pointer;
+		box-shadow: var(--shadow-sm);
 	}
 
 	.kick-btn:hover:not(:disabled) {
-		background: rgba(255, 100, 100, 0.18);
-		border-color: rgba(255, 100, 100, 0.6);
+		background: color-mix(in srgb, var(--danger) 20%, var(--surface));
 	}
 
 	.kick-btn:disabled {
@@ -163,7 +163,7 @@
 
 	.points {
 		font-weight: 700;
-		color: var(--accent);
+		color: var(--brand);
 	}
 
 	.tb {
@@ -171,11 +171,16 @@
 	}
 
 	.leader .name-text {
-		color: var(--accent);
+		color: var(--brand);
 	}
 
 	.me {
-		background: rgba(94, 224, 109, 0.06);
+		background: var(--brand-muted-you);
+	}
+
+	:global([data-theme='light']) .points,
+	:global([data-theme='light']) .leader .name-text {
+		color: var(--text);
 	}
 
 	.crown {

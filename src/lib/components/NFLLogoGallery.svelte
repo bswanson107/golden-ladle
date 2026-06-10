@@ -26,9 +26,10 @@
 		align-items: center;
 		gap: 0.5rem;
 		padding: 0.85rem 0.5rem;
-		border: 1px solid var(--border);
-		border-radius: 10px;
-		background: var(--bg-elevated);
+		border: none;
+		border-radius: var(--radius);
+		background: var(--surface);
+		box-shadow: var(--shadow-sm);
 		text-align: center;
 	}
 

@@ -79,9 +79,10 @@
 <style>
 	.week-nav {
 		padding: 1rem 1.1rem;
-		border: 1px solid var(--border);
-		border-radius: 12px;
-		background: var(--bg-elevated);
+		border: none;
+		border-radius: var(--radius);
+		background: var(--surface);
+		box-shadow: var(--shadow-sm);
 	}
 
 	.week-select {
@@ -105,12 +106,18 @@
 	.week-controls select {
 		flex: 1;
 		min-width: 0;
-		padding: 0.55rem 0.65rem;
-		border: 1px solid var(--border);
-		border-radius: 8px;
-		background: var(--bg);
+		height: 2.25rem;
+		padding: 0 0.5rem;
+		border: none;
+		border-radius: var(--radius);
+		background: var(--surface-2);
 		color: var(--text);
-		font-size: 0.95rem;
+		font-size: 0.85rem;
+		font-weight: 600;
+		font-family: var(--font-body);
+		line-height: 1;
+		box-shadow: var(--shadow-sm);
+		cursor: pointer;
 	}
 
 	.week-step {
@@ -120,14 +127,15 @@
 		width: 2.25rem;
 		height: 2.25rem;
 		padding: 0;
-		border: 1px solid var(--border);
-		border-radius: 8px;
-		background: var(--bg);
+		border: none;
+		border-radius: var(--radius);
+		background: var(--surface-2);
 		color: var(--text);
 		font-size: 1rem;
 		line-height: 1;
 		cursor: pointer;
 		flex-shrink: 0;
+		box-shadow: var(--shadow-sm);
 	}
 
 	.week-step:hover:not(:disabled) {
@@ -143,19 +151,20 @@
 	.reset-btn {
 		margin-top: 0.85rem;
 		padding: 0.5rem 0.75rem;
-		border: 1px solid rgba(255, 100, 100, 0.35);
-		border-radius: 8px;
-		background: rgba(255, 100, 100, 0.08);
-		color: #e89898;
+		border: none;
+		border-radius: var(--radius);
+		background: color-mix(in srgb, var(--danger) 12%, var(--surface));
+		color: var(--danger);
 		font-size: 0.85rem;
 		font-weight: 600;
+		font-family: var(--font-body);
 		cursor: pointer;
-		transition: background 0.15s, border-color 0.15s;
+		box-shadow: var(--shadow-sm);
+		transition: background 0.15s;
 	}
 
 	.reset-btn:hover:not(:disabled) {
-		background: rgba(255, 100, 100, 0.14);
-		border-color: rgba(255, 100, 100, 0.5);
+		background: color-mix(in srgb, var(--danger) 20%, var(--surface));
 	}
 
 	.reset-btn:disabled {
@@ -168,6 +177,7 @@
 		border: none;
 		border-radius: 0;
 		background: transparent;
+		box-shadow: none;
 	}
 
 	.week-nav.compact .week-select {
@@ -186,8 +196,9 @@
 	}
 
 	.week-nav.compact .week-controls select {
-		padding: 0.45rem 0.55rem;
-		font-size: 0.9rem;
+		height: 2rem;
+		padding: 0 0.4rem;
+		font-size: 0.8rem;
 	}
 
 	.week-nav.compact .week-step {

@@ -1,0 +1,142 @@
+/* ── Shared tokens (both themes) ── */
+:root {
+	--font-display: 'Archivo Black', 'Arial Black', sans-serif;
+	--font-body: 'IBM Plex Sans', system-ui, sans-serif;
+	--radius: 4px;
+
+	--shadow: 3px 3px 0 var(--shadow-color);
+	--shadow-sm: 2px 2px 0 var(--shadow-color);
+	--shadow-lg: 4px 4px 0 var(--shadow-color);
+	--shadow-press: 1px 1px 0 var(--shadow-color);
+	--shadow-focus: 1px 1px 0 var(--shadow-color), 3px 3px 0 var(--brand);
+
+	--chrome-bg: color-mix(in srgb, var(--bg) 88%, transparent);
+
+	/* Legacy aliases — remove once all components migrated */
+	--bg-elevated: var(--surface);
+	--accent: var(--brand);
+	--underdog: var(--brand);
+	--underdog-bg: var(--brand);
+}
+
+[data-theme='dark'] {
+	color-scheme: dark;
+
+	--bg: #16161a;
+	--surface: #222228;
+	--surface-2: #2c2c34;
+	--text: #fafafa;
+	--text-muted: #a8a8b3;
+	--border: color-mix(in srgb, var(--text) 10%, transparent);
+	--shadow-color: #0a0a0c;
+
+	--brand: #e0c068;
+	--brand-text: #1a1408;
+	--brand-muted: color-mix(in srgb, var(--brand) 12%, var(--surface));
+	--brand-muted-you: color-mix(in srgb, var(--brand) 14%, var(--surface));
+
+	--primary: #e4e4ea;
+	--primary-text: #121216;
+	--secondary: #3a3a44;
+	--secondary-text: #f4f4f6;
+
+	--input-bg: #1e1e24;
+	--link: #7eb8ff;
+	--link-hover: #a8d4ff;
+
+	--danger: #dc2626;
+	--danger-text: #ffffff;
+	--danger-muted: color-mix(in srgb, var(--danger) 18%, var(--surface));
+
+	--win-bg: #166534;
+	--win-text: #ecfdf5;
+	--win-muted: color-mix(in srgb, var(--win-bg) 18%, var(--surface));
+
+	--loss-bg: #b91c1c;
+	--loss-text: #ffffff;
+	--loss-muted: color-mix(in srgb, var(--loss-bg) 18%, var(--surface));
+
+	--tie-bg: #1e40af;
+	--tie-text: #eff6ff;
+	--tie-muted: color-mix(in srgb, var(--tie-bg) 18%, var(--surface));
+
+	--pending-bg: #4b5563;
+	--pending-text: #f9fafb;
+
+	--ring-win: #4ade80;
+	--ring-loss: #ef4444;
+	--ring-tie: #60a5fa;
+	--ring-pending: #9ca3af;
+
+	--logo-tile-bg: #eef1f6;
+	--logo-tile-border: rgba(255, 255, 255, 0.12);
+	--logo-tile-shadow: var(--shadow-sm);
+}
+
+[data-theme='light'] {
+	color-scheme: light;
+
+	--bg: #f3ecdf;
+	--surface: #fff9f0;
+	--surface-2: #ffffff;
+	--text: #1a1208;
+	--text-muted: #5c5348;
+	--border: color-mix(in srgb, var(--text) 10%, transparent);
+	--shadow-color: #2a2218;
+
+	--brand: #e0c068;
+	--brand-text: #1a1408;
+	--brand-muted: color-mix(in srgb, var(--brand) 10%, var(--surface));
+	--brand-muted-you: color-mix(in srgb, var(--brand) 12%, var(--surface));
+
+	--primary: #2a2826;
+	--primary-text: #faf9f7;
+	--secondary: #e8e0d4;
+	--secondary-text: #1a1208;
+
+	--input-bg: #ffffff;
+	--link: #2563eb;
+	--link-hover: #1d4ed8;
+
+	--danger: #b91c1c;
+	--danger-text: #ffffff;
+	--danger-muted: color-mix(in srgb, var(--danger) 18%, var(--surface));
+
+	--win-bg: #15803d;
+	--win-text: #ffffff;
+	--win-muted: color-mix(in srgb, var(--win-bg) 18%, var(--surface));
+
+	--loss-bg: #b91c1c;
+	--loss-text: #ffffff;
+	--loss-muted: color-mix(in srgb, var(--loss-bg) 18%, var(--surface));
+
+	--tie-bg: #1d4ed8;
+	--tie-text: #ffffff;
+	--tie-muted: color-mix(in srgb, var(--tie-bg) 18%, var(--surface));
+
+	--pending-bg: #78716c;
+	--pending-text: #fafaf9;
+
+	--ring-win: var(--win-bg);
+	--ring-loss: var(--loss-bg);
+	--ring-tie: var(--tie-bg);
+	--ring-pending: var(--pending-bg);
+
+	--logo-tile-bg: #eef1f6;
+	--logo-tile-border: rgba(0, 0, 0, 0.12);
+	--logo-tile-shadow: var(--shadow-sm);
+}
+
+/* ── Brand text: gold foreground in dark, neutral in light ── */
+[data-theme='dark'] .brand-text {
+	color: var(--brand);
+}
+
+[data-theme='light'] .brand-text {
+	color: var(--text);
+}
+
+[data-theme='light'] .section-title {
+	border-left: 3px solid var(--brand);
+	padding-left: 0.55rem;
+}

@@ -1,5 +1,11 @@
 <script lang="ts">
 	import TeamLogo from '$lib/components/TeamLogo.svelte';
+	import {
+		normalizePickUserId,
+		pickSubmissionKey,
+		type PickSubmissionsByCell,
+		type WeekPickSubmissionStatus
+	} from '$lib/standings';
 	import type { LeaguePick, PickOutcome } from '$lib/types/standings';
 
 	type CellDisplay = 'empty' | 'hidden' | 'visible' | 'missed';
@@ -8,25 +14,42 @@
 		picks,
 		standings = [],
 		currentUserId = null,
-		viewWeek = null
+		viewWeek = null,
+		pickSubmissions = {}
 	}: {
 		picks: LeaguePick[];
 		standings?: { user_id: string; display_name: string; standing_rank: number }[];
 		currentUserId?: string | null;
 		viewWeek?: number | null;
+		/** `${userId}:${weekNumber}` → submission status for hidden picks. */
+		pickSubmissions?: PickSubmissionsByCell;
 	} = $props();
 
 	const LOGO_SIZE = 24;
 
 	const now = Date.now();
+	const normalizedCurrentUserId = $derived(
+		currentUserId ? normalizePickUserId(currentUserId) : null
+	);
 
-	const rankByUser = $derived(new Map(standings.map((s) => [s.user_id, s.standing_rank])));
+	const rankByUser = $derived(
+		new Map(standings.map((s) => [normalizePickUserId(s.user_id), s.standing_rank]))
+	);
 
 	const weeks = $derived.by(() => {
-		const allWeeks = [...new Set(picks.map((p) => p.week_number))].sort((a, b) => b - a);
-		if (viewWeek !== null) {
-			return allWeeks.includes(viewWeek) ? [viewWeek] : viewWeek > 0 ? [viewWeek] : allWeeks;
+		const fromPicks = picks.map((p) => p.week_number);
+		const fromSubmissions = Object.keys(pickSubmissions).map((key) => {
+			const separator = key.lastIndexOf(':');
+			return separator === -1 ? 0 : Number(key.slice(separator + 1));
+		});
+		const allWeeks = [...new Set([...fromPicks, ...fromSubmissions])]
+			.filter((week) => week > 0)
+			.sort((a, b) => b - a);
+
+		if (viewWeek !== null && viewWeek > 0) {
+			return [viewWeek];
 		}
+
 		return allWeeks;
 	});
 
@@ -34,14 +57,18 @@
 		const byUser = new Map<string, { name: string; picks: Map<number, LeaguePick> }>();
 
 		for (const row of standings) {
-			byUser.set(row.user_id, { name: row.display_name, picks: new Map() });
+			byUser.set(normalizePickUserId(row.user_id), {
+				name: row.display_name,
+				picks: new Map()
+			});
 		}
 
 		for (const pick of picks) {
-			let entry = byUser.get(pick.user_id);
+			const userId = normalizePickUserId(pick.user_id);
+			let entry = byUser.get(userId);
 			if (!entry) {
 				entry = { name: pick.display_name, picks: new Map() };
-				byUser.set(pick.user_id, entry);
+				byUser.set(userId, entry);
 			}
 			entry.picks.set(pick.week_number, pick);
 		}
@@ -53,6 +80,21 @@
 				const rankB = rankByUser.get(b.userId) ?? 999;
 				return rankA - rankB || a.name.localeCompare(b.name);
 			});
+	});
+
+	const cellDisplays = $derived.by(() => {
+		const displays = new Map<string, CellDisplay>();
+
+		for (const player of players) {
+			for (const week of weeks) {
+				const key = pickSubmissionKey(player.userId, week);
+				const pick = player.picks.get(week);
+				const submission = pickSubmissions[key];
+				displays.set(key, cellDisplay(pick, submission));
+			}
+		}
+
+		return displays;
 	});
 
 	function ringClass(outcome: PickOutcome, display: CellDisplay): string {
@@ -74,15 +116,27 @@
 		}
 	}
 
-	function cellDisplay(pick: LeaguePick | undefined, userId: string): CellDisplay {
-		if (!pick) return 'empty';
-		if (pick.is_missed || pick.outcome === 'missed') return 'missed';
+	function cellDisplay(
+		pick: LeaguePick | undefined,
+		submission: WeekPickSubmissionStatus | undefined
+	): CellDisplay {
+		if (pick?.is_missed || pick?.outcome === 'missed' || submission === 'missed') return 'missed';
 
-		const kickedOff = new Date(pick.kickoff_at).getTime() <= now;
-		if (!kickedOff && userId === currentUserId) return 'hidden';
-		if (!kickedOff) return 'empty';
+		const hasSubmitted = pick !== undefined || submission === 'submitted';
+		if (!hasSubmitted) return 'empty';
 
-		return 'visible';
+		if (pick) {
+			const kickedOff = new Date(pick.kickoff_at).getTime() <= now;
+			if (kickedOff) return 'visible';
+		}
+
+		return 'hidden';
+	}
+
+	function hiddenPickTitle(userId: string): string {
+		return userId === normalizedCurrentUserId
+			? 'Your pick is saved — team hidden until kickoff'
+			: 'Pick saved — team hidden until kickoff';
 	}
 </script>
 
@@ -102,13 +156,11 @@
 					<th scope="row" class="sticky player-col">{player.name}</th>
 					{#each weeks as week (week)}
 						{@const pick = player.picks.get(week)}
-						{@const display = cellDisplay(pick, player.userId)}
+						{@const display =
+							cellDisplays.get(pickSubmissionKey(player.userId, week)) ?? 'empty'}
 						<td class="pick-cell">
 							{#if display === 'hidden'}
-								<span
-									class="pick-ring ring-hidden"
-									title="Pick saved — hidden from others until kickoff"
-								>
+								<span class="pick-ring ring-hidden" title={hiddenPickTitle(player.userId)}>
 									<span class="ring-icon" aria-hidden="true">🔒</span>
 								</span>
 							{:else if display === 'missed'}

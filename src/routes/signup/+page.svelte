@@ -2,6 +2,7 @@
 	import { goto } from '$app/navigation';
 	import { base } from '$app/paths';
 	import { useAuth } from '$lib/auth';
+	import { getPostAuthPath } from '$lib/leagues';
 	import { getSupabase } from '$lib/supabase';
 
 	const auth = useAuth();
@@ -14,9 +15,10 @@
 	let submitting = $state(false);
 
 	$effect(() => {
-		if (!auth.loading && auth.user) {
-			goto(`${base}/leagues`);
-		}
+		const user = auth.user;
+		if (auth.loading || !user) return;
+
+		getPostAuthPath(user.id, base).then((path) => goto(path));
 	});
 
 	async function handleSubmit(event: SubmitEvent) {
@@ -42,8 +44,9 @@
 			return;
 		}
 
-		if (data.session) {
-			goto(`${base}/leagues`);
+		if (data.session && data.user) {
+			const path = await getPostAuthPath(data.user.id, base);
+			goto(path);
 			return;
 		}
 

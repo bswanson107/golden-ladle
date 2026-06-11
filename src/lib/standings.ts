@@ -115,6 +115,107 @@ export async function fetchLeaguePicks(leagueId: string): Promise<{
 	return { picks, error: null };
 }
 
+export type WeekPickSubmissionStatus = 'submitted' | 'missed';
+/** `${userId}:${weekNumber}` → submission status */
+export type PickSubmissionsByCell = Record<string, WeekPickSubmissionStatus>;
+
+type PickSubmissionRow = {
+	user_id: string;
+	week_number: number;
+	status: WeekPickSubmissionStatus | string;
+};
+
+type WeekPickStatusRow = {
+	user_id: string;
+	status: WeekPickSubmissionStatus | 'none' | string;
+};
+
+function normalizeUserId(userId: string): string {
+	return userId.toLowerCase();
+}
+
+export function pickSubmissionKey(userId: string, weekNumber: number): string {
+	return `${normalizeUserId(userId)}:${weekNumber}`;
+}
+
+function mapSubmissionRows(rows: PickSubmissionRow[]): PickSubmissionsByCell {
+	const byCell: PickSubmissionsByCell = {};
+	for (const row of rows) {
+		if (row.status === 'submitted' || row.status === 'missed') {
+			byCell[pickSubmissionKey(row.user_id, row.week_number)] = row.status;
+		}
+	}
+	return byCell;
+}
+
+/** All submitted/missed picks for a league (team details still hidden by RLS). */
+export async function fetchLeaguePickSubmissions(
+	leagueId: string,
+	weekNumber?: number
+): Promise<{ byCell: PickSubmissionsByCell; error: string | null }> {
+	const supabase = getSupabase();
+
+	const { data, error } = await supabase.rpc('get_league_pick_submissions', {
+		p_league_id: leagueId
+	});
+
+	if (!error) {
+		let rows = (data ?? []) as PickSubmissionRow[];
+		if (weekNumber !== undefined) {
+			rows = rows.filter((row) => row.week_number === weekNumber);
+		}
+		return { byCell: mapSubmissionRows(rows), error: null };
+	}
+
+	// Fallback when only the per-week RPC exists (migrations 013/014).
+	if (weekNumber === undefined) {
+		return { byCell: {}, error: error.message };
+	}
+
+	const rpc = await supabase.rpc('league_week_pick_status', {
+		p_league_id: leagueId,
+		p_week_number: weekNumber
+	});
+
+	if (rpc.error) {
+		return { byCell: {}, error: rpc.error.message };
+	}
+
+	const byCell: PickSubmissionsByCell = {};
+	for (const row of (rpc.data ?? []) as WeekPickStatusRow[]) {
+		if (row.status === 'submitted' || row.status === 'missed') {
+			byCell[pickSubmissionKey(row.user_id, weekNumber)] = row.status;
+		}
+	}
+
+	return { byCell, error: null };
+}
+
+/** @deprecated Use fetchLeaguePickSubmissions */
+export async function fetchLeagueWeekPickStatus(
+	leagueId: string,
+	weekNumber: number
+): Promise<{ statusByUser: Record<string, WeekPickSubmissionStatus>; error: string | null }> {
+	const result = await fetchLeaguePickSubmissions(leagueId, weekNumber);
+	if (result.error) {
+		return { statusByUser: {}, error: result.error };
+	}
+
+	const statusByUser: Record<string, WeekPickSubmissionStatus> = {};
+	for (const [key, status] of Object.entries(result.byCell)) {
+		const separator = key.lastIndexOf(':');
+		if (separator === -1) continue;
+		const week = Number(key.slice(separator + 1));
+		if (week === weekNumber) {
+			statusByUser[key.slice(0, separator)] = status;
+		}
+	}
+
+	return { statusByUser, error: null };
+}
+
+export { normalizeUserId as normalizePickUserId };
+
 export async function fetchLeagueStandings(leagueId: string): Promise<{
 	standings: StandingRow[];
 	error: string | null;

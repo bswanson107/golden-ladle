@@ -7,27 +7,25 @@
 	import DemoBanner from '$lib/components/pick/DemoBanner.svelte';
 	import WeekNavigator from '$lib/components/pick/WeekNavigator.svelte';
 	import PickReminderPanel from '$lib/components/league/PickReminderPanel.svelte';
+	import PickDashboard from '$lib/components/league/PickDashboard.svelte';
+	import LeagueRulesModal from '$lib/components/league/LeagueRulesModal.svelte';
 	import StandingsTable from '$lib/components/league/StandingsTable.svelte';
 	import PicksGrid from '$lib/components/league/PicksGrid.svelte';
-	import TeamLogo from '$lib/components/TeamLogo.svelte';
 	import {
-		formatPoints,
-		getLatestScoredPick,
 		getMaxVisibleWeek,
 		hasDemoPicks,
 		loadDemoState,
 		mergeDemoLeagueView,
-		outcomeLabel,
 		resetDemoPicks,
 		saveDemoState,
 		simulatedWeekLabel
 	} from '$lib/demo';
 	import { fetchWeekGames } from '$lib/games';
-	import { formatPickDeadline } from '$lib/gameKickoff';
-	import { getPickCtaState } from '$lib/leaguePickStatus';
-	import { adminKickLeagueMember, fetchLeague } from '$lib/leagues';
-	import { fetchLeaguePicks, fetchLeagueStandings } from '$lib/standings';
+	import { getPickCtaState, getWeekFirstKickoff } from '$lib/leaguePickStatus';
+	import { adminKickLeagueMember, fetchLeague, fetchMyLeagues } from '$lib/leagues';
+	import { fetchLeaguePicks, fetchLeaguePickSubmissions, fetchLeagueStandings, type PickSubmissionsByCell } from '$lib/standings';
 	import { getCurrentWeekFromDate, isDemoSeason } from '$lib/season';
+	import { syncSeasonIndicatorForLeague } from '$lib/seasonIndicatorStore.svelte';
 	import type { DemoState } from '$lib/types/demo';
 	import type { WeekGame } from '$lib/types/game';
 	import type { LeagueWithRole } from '$lib/types/league';
@@ -39,6 +37,7 @@
 	let league = $state<LeagueWithRole | null>(null);
 	let standings = $state<StandingRow[]>([]);
 	let picks = $state<LeaguePick[]>([]);
+	let pickSubmissions = $state<PickSubmissionsByCell>({});
 	let demoState = $state<DemoState>({ enabled: false, simulatedWeek: 1, picks: {} });
 	let demoGamesByWeek = $state<Map<number, WeekGame[]>>(new Map());
 	let liveWeekGames = $state<WeekGame[]>([]);
@@ -48,6 +47,8 @@
 	let copied = $state(false);
 	let kickingUserId = $state<string | null>(null);
 	let kickError = $state<string | null>(null);
+	let leagueCount = $state<number | null>(null);
+	let rulesOpen = $state(false);
 
 	const leagueId = $derived($page.params.id);
 
@@ -94,11 +95,6 @@
 		};
 	});
 
-	const latestDemoPick = $derived.by(() => {
-		if (!isDemo || !demoState.enabled) return null;
-		return getLatestScoredPick(demoState, demoGamesByWeek);
-	});
-
 	const userCurrentWeekPick = $derived.by(() => {
 		const user = auth.user;
 		if (!user || isDemo) return undefined;
@@ -112,9 +108,93 @@
 		return getPickCtaState(viewWeek, liveWeekGames, userCurrentWeekPick);
 	});
 
-	function handleLiveWeekChange(week: number) {
-		viewWeek = week;
-	}
+	const demoDashboardPick = $derived.by((): LeaguePick | null => {
+		const user = auth.user;
+		if (!isDemo || !user) return null;
+
+		const demoPick = demoState.picks[demoState.simulatedWeek];
+		if (!demoPick) return null;
+
+		const games = demoGamesByWeek.get(demoState.simulatedWeek) ?? [];
+		const game = games.find((g) => g.id === demoPick.game_id) ?? null;
+
+		return {
+			id: 'demo',
+			user_id: user.id,
+			display_name: playerDisplayName,
+			week_number: demoState.simulatedWeek,
+			team_id: demoPick.team_id,
+			team_abbreviation: demoPick.team_abbreviation,
+			team_name: demoPick.team_name,
+			win_pct_at_pick: demoPick.win_pct_at_pick,
+			is_underdog_at_pick: demoPick.is_underdog_at_pick,
+			outcome: 'pending',
+			points_awarded: 0,
+			game_id: demoPick.game_id,
+			kickoff_at: game?.kickoff_at ?? '',
+			is_missed: false,
+			is_commissioner_override: false
+		};
+	});
+
+	const demoPickCta = $derived.by(() => {
+		if (!isDemo) return { kind: 'hidden' as const };
+
+		const week = demoState.simulatedWeek;
+		const games = demoGamesByWeek.get(week) ?? [];
+
+		if (demoState.picks[week]) {
+			return {
+				kind: 'submitted' as const,
+				week,
+				changeable: true,
+				teamAbbreviation: demoState.picks[week].team_abbreviation
+			};
+		}
+
+		const firstKickoff = getWeekFirstKickoff(games);
+		return {
+			kind: 'needs_pick' as const,
+			week,
+			deadlineLabel: firstKickoff ?? new Date().toISOString()
+		};
+	});
+
+	const dashboardPick = $derived(isDemo ? demoDashboardPick : (userCurrentWeekPick ?? null));
+
+	const dashboardCta = $derived(isDemo ? demoPickCta : pickCta);
+
+	const dashboardWeek = $derived(isDemo ? demoState.simulatedWeek : viewWeek);
+
+	const dashboardGame = $derived.by(() => {
+		const pick = dashboardPick;
+		if (!pick) return null;
+
+		if (isDemo) {
+			return (demoGamesByWeek.get(demoState.simulatedWeek) ?? []).find((g) => g.id === pick.game_id) ?? null;
+		}
+
+		return liveWeekGames.find((g) => g.id === pick.game_id) ?? null;
+	});
+
+	const showMyLeaguesBack = $derived(leagueCount !== null && leagueCount > 1);
+
+	$effect(() => {
+		const leagueData = league;
+		if (!leagueData) return;
+
+		if (isDemo) {
+			syncSeasonIndicatorForLeague(leagueData.season_year, demoState.simulatedWeek);
+		} else {
+			syncSeasonIndicatorForLeague(leagueData.season_year);
+		}
+	});
+
+	const rulesThreshold = $derived(
+		league?.underdog_threshold_pct != null
+			? Math.round(Number(league.underdog_threshold_pct))
+			: 33
+	);
 
 	function refreshDemoState() {
 		const user = auth.user;
@@ -149,6 +229,7 @@
 			fetchLeagueStandings(id),
 			fetchLeaguePicks(id)
 		]);
+		const submissionsResult = await fetchLeaguePickSubmissions(id);
 
 		if (standingsResult.error) {
 			error = standingsResult.error;
@@ -162,6 +243,10 @@
 			picks = [];
 		} else if (!picksResult.error) {
 			picks = picksResult.picks;
+		}
+
+		if (!submissionsResult.error) {
+			pickSubmissions = submissionsResult.byCell;
 		}
 	}
 
@@ -185,6 +270,9 @@
 
 		standings = standings.filter((row) => row.user_id !== userId);
 		picks = picks.filter((pick) => pick.user_id !== userId);
+		pickSubmissions = Object.fromEntries(
+			Object.entries(pickSubmissions).filter(([key]) => !key.startsWith(`${userId.toLowerCase()}:`))
+		);
 
 		await reloadLeagueData();
 	}
@@ -200,13 +288,15 @@
 		Promise.all([
 			fetchLeague(id, user.id),
 			fetchLeagueStandings(id),
-			fetchLeaguePicks(id)
-		]).then(([leagueResult, standingsResult, picksResult]) => {
+			fetchLeaguePicks(id),
+			fetchLeaguePickSubmissions(id)
+		]).then(([leagueResult, standingsResult, picksResult, submissionsResult]) => {
 			if (leagueResult.error || !leagueResult.league) {
 				league = null;
 				error = leagueResult.error ?? 'League not found.';
 				standings = [];
 				picks = [];
+				pickSubmissions = {};
 				demoState = { enabled: false, simulatedWeek: 1, picks: {} };
 			} else {
 				league = leagueResult.league;
@@ -229,8 +319,22 @@
 				} else if (!picksResult.error) {
 					picks = picksResult.picks;
 				}
+				if (!submissionsResult.error) {
+					pickSubmissions = submissionsResult.byCell;
+				} else {
+					pickSubmissions = {};
+				}
 			}
 			loading = false;
+		});
+	});
+
+	$effect(() => {
+		const user = auth.user;
+		if (auth.loading || !user) return;
+
+		fetchMyLeagues(user.id).then((result) => {
+			leagueCount = result.leagues.length;
 		});
 	});
 
@@ -255,7 +359,9 @@
 			return;
 		}
 
-		const weeks = [...new Set(Object.keys(state.picks).map(Number))];
+		const weeks = [
+			...new Set([...Object.keys(state.picks).map(Number), state.simulatedWeek])
+		];
 		if (weeks.length === 0) {
 			demoGamesByWeek = new Map();
 			return;
@@ -291,9 +397,11 @@
 </script>
 
 <main class="page page-league">
-	<div class="back-nav">
-		<a href="{base}/leagues" class="btn btn-ghost btn-sm">← My leagues</a>
-	</div>
+	{#if showMyLeaguesBack}
+		<div class="back-nav">
+			<a href="{base}/leagues" class="btn btn-ghost btn-sm">← My leagues</a>
+		</div>
+	{/if}
 
 	{#if auth.loading || loading}
 		<p class="muted">Loading league…</p>
@@ -307,62 +415,14 @@
 		<h1 class="page-title">{league.name}</h1>
 		<p class="page-subtitle">{league.season_year} season</p>
 
-		<nav class="league-nav" aria-label="League sections">
-			<a href="{base}/league/{league.id}/rules" class="btn btn-ghost btn-sm">Rules</a>
-		</nav>
-
-		{#if isDemo}
-			<section class="card pick-cta">
-				<div class="pick-cta-row">
-					<div>
-						<h2 class="card-title">Your pick</h2>
-						<p class="muted">Preview picks with historical 2025 results.</p>
-					</div>
-					<a href="{base}/league/{league.id}/pick" class="btn btn-primary btn-sm">Make your pick</a>
-				</div>
-				<p class="demo-summary">
-					Viewing {simulatedWeekLabel(demoState.simulatedWeek)}
-					{#if latestDemoPick}
-						<span class="demo-summary-result">
-							· Latest result:
-							<TeamLogo teamCode={latestDemoPick.team_id} size={24} />
-							{latestDemoPick.team_abbreviation}
-							({outcomeLabel(latestDemoPick.outcome)}, {formatPoints(latestDemoPick.points_awarded)} pts)
-						</span>
-					{/if}
-				</p>
-			</section>
-		{:else if pickCta.kind === 'needs_pick'}
-			<section class="alert alert-warn pick-cta">
-				<div class="pick-cta-row">
-					<div>
-						<h2 class="card-title">Week {pickCta.week} · pick before {formatPickDeadline(pickCta.deadlineLabel)}</h2>
-						<p class="muted">You haven't submitted a pick for this week yet.</p>
-					</div>
-					<a href="{base}/league/{league.id}/pick" class="btn btn-primary btn-sm">Make your pick →</a>
-				</div>
-			</section>
-		{:else if pickCta.kind === 'submitted'}
-			<section class="alert alert-success pick-cta">
-				<div class="pick-cta-row">
-					<div>
-						<h2 class="card-title">Week {pickCta.week} pick saved ✓</h2>
-						<p class="muted">
-							{#if pickCta.changeable}
-								You can change your pick anytime before kickoff. It's hidden from others until
-								then.
-							{:else if pickCta.teamAbbreviation}
-								You picked <strong>{pickCta.teamAbbreviation}</strong>.
-							{:else}
-								Your pick is in for this week.
-							{/if}
-						</p>
-					</div>
-					{#if pickCta.changeable}
-						<a href="{base}/league/{league.id}/pick" class="btn btn-ghost btn-sm">Change pick</a>
-					{/if}
-				</div>
-			</section>
+		{#if isDemo || dashboardCta.kind !== 'hidden'}
+			<PickDashboard
+				leagueId={league.id}
+				week={dashboardWeek}
+				pickCta={dashboardCta}
+				userPick={dashboardPick}
+				game={dashboardGame}
+			/>
 		{/if}
 
 		{#if isDemo}
@@ -375,12 +435,6 @@
 					canReset={hasDemoPicks(demoState)}
 					onReset={handleResetDemo}
 				/>
-			</section>
-		{/if}
-
-		{#if !isDemo}
-			<section class="live-week-wrap">
-				<WeekNavigator viewWeek={viewWeek} onWeekChange={handleLiveWeekChange} label="View week" />
 			</section>
 		{/if}
 
@@ -450,23 +504,38 @@
 		<section class="card">
 			<h2 class="card-title">Weekly picks</h2>
 			<p class="muted">
+				Green = win, gray = loss, amber = tie.
 				{#if isDemo}
-					Green = win, gray = loss, amber = tie. Gold badge "2" = underdawg win.
-				{:else}
-					Viewing Week {viewWeek}. Green = win, gray = loss, amber = tie.
+					Gold badge "2" = underdawg win.
 				{/if}
 			</p>
-			{#if leagueView.picks.length === 0}
+			{#if leagueView.picks.length === 0 && Object.keys(pickSubmissions).length === 0}
 				<p class="muted">No picks yet.</p>
 			{:else}
 				<PicksGrid
 					picks={leagueView.picks}
 					standings={leagueView.standings}
 					currentUserId={auth.user?.id ?? null}
-					viewWeek={isDemo ? null : viewWeek}
+					viewWeek={null}
+					{pickSubmissions}
 				/>
 			{/if}
 		</section>
+
+		<footer class="league-footer">
+			<button type="button" class="btn btn-ghost btn-sm" onclick={() => (rulesOpen = true)}>
+				Rules
+			</button>
+			<a href="{base}/leagues" class="btn btn-ghost btn-sm">Other leagues</a>
+		</footer>
+
+		<LeagueRulesModal
+			open={rulesOpen}
+			leagueName={league.name}
+			seasonYear={league.season_year}
+			threshold={rulesThreshold}
+			onClose={() => (rulesOpen = false)}
+		/>
 	{/if}
 </main>
 
@@ -518,13 +587,6 @@
 		color: var(--text);
 	}
 
-	.pick-cta-row {
-		display: flex;
-		align-items: flex-start;
-		justify-content: space-between;
-		gap: 1rem;
-	}
-
 	.commissioner-tools-row {
 		display: flex;
 		align-items: flex-start;
@@ -532,32 +594,14 @@
 		gap: 1rem;
 	}
 
-	.league-nav {
+	.league-footer {
 		display: flex;
+		flex-wrap: wrap;
+		justify-content: center;
 		gap: 0.75rem;
-		margin-top: 0.5rem;
-	}
-
-	.pick-cta {
-		margin-top: 1.25rem;
-	}
-
-	.live-week-wrap {
-		margin-top: 1.25rem;
-	}
-
-	.demo-summary {
-		margin: 0.75rem 0 0;
-		padding-top: 0.75rem;
+		margin-top: 2rem;
+		padding-top: 1.25rem;
 		border-top: 1px solid var(--border);
-		font-size: 0.85rem;
-		color: var(--link);
-	}
-
-	.demo-summary-result {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.35rem;
 	}
 
 	.demo-view-note {

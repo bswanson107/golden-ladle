@@ -2,13 +2,15 @@
 	import { goto } from '$app/navigation';
 	import { base } from '$app/paths';
 	import { useAuth } from '$lib/auth';
+	import { getPostAuthPath } from '$lib/leagues';
 
 	const auth = useAuth();
 
 	$effect(() => {
-		if (!auth.loading && auth.user) {
-			goto(`${base}/leagues`);
-		}
+		const user = auth.user;
+		if (auth.loading || !user) return;
+
+		getPostAuthPath(user.id, base).then((path) => goto(path));
 	});
 </script>
 
@@ -24,6 +26,8 @@
 			<a href="{base}/login" class="btn btn-primary">Sign in</a>
 			<a href="{base}/signup" class="btn btn-ghost">Create account</a>
 		</div>
+	{:else}
+		<p class="page-subtitle">Loading…</p>
 	{/if}
 </main>
 

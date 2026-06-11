@@ -142,8 +142,11 @@
 	<WinPctBar
 		awayTeamCode={game.away.id}
 		homeTeamCode={game.home.id}
+		awayTeamName={game.away.name}
+		homeTeamName={game.home.name}
 		awayWinPct={game.away_win_pct}
 		homeWinPct={game.home_win_pct}
+		pickedTeamCode={selectedTeamId}
 	/>
 </article>
 

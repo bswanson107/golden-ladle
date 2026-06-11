@@ -54,6 +54,15 @@ export async function fetchMyLeagues(userId: string): Promise<{
 	return { leagues, error: null };
 }
 
+/** After sign-in: land on the sole league, or the league list when there are zero or many. */
+export async function getPostAuthPath(userId: string, basePath: string): Promise<string> {
+	const { leagues } = await fetchMyLeagues(userId);
+	if (leagues.length === 1) {
+		return `${basePath}/league/${leagues[0].id}`;
+	}
+	return `${basePath}/leagues`;
+}
+
 export async function createLeague(
 	name: string,
 	seasonYear: number

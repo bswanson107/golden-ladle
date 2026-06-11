@@ -1,17 +1,23 @@
 <script lang="ts">
 	import { formatWinPct } from '$lib/demo';
-	import { getTeamTileGradient } from '$lib/data/nflTeams';
+	import { getTeamName, getTeamTileGradient } from '$lib/data/nflTeams';
 
 	let {
 		awayTeamCode,
 		homeTeamCode,
+		awayTeamName,
+		homeTeamName,
 		awayWinPct = null,
-		homeWinPct = null
+		homeWinPct = null,
+		pickedTeamCode = null
 	}: {
 		awayTeamCode: string;
 		homeTeamCode: string;
+		awayTeamName?: string;
+		homeTeamName?: string;
 		awayWinPct?: number | null;
 		homeWinPct?: number | null;
+		pickedTeamCode?: string | null;
 	} = $props();
 
 	const split = $derived.by(() => {
@@ -26,31 +32,52 @@
 
 	const awayGradient = $derived(getTeamTileGradient(awayTeamCode));
 	const homeGradient = $derived(getTeamTileGradient(homeTeamCode));
+	const awayPicked = $derived(pickedTeamCode === awayTeamCode);
+	const homePicked = $derived(pickedTeamCode === homeTeamCode);
+	const hasPick = $derived(awayPicked || homePicked);
+
+	function teamLabel(code: string, override?: string): string {
+		const full = override?.trim() || getTeamName(code);
+		if (!full || full === code) return code;
+		const parts = full.split(' ');
+		return parts[parts.length - 1] ?? full;
+	}
+
+	const awayLabel = $derived(teamLabel(awayTeamCode, awayTeamName));
+	const homeLabel = $derived(teamLabel(homeTeamCode, homeTeamName));
 </script>
 
 <div class="win-pct">
 	<div class="win-pct-values" aria-hidden="true">
 		<div class="value-segment away" style:flex-grow={split.away}>
-			<span class="pct away-pct">{formatWinPct(awayWinPct)}</span>
+			<span class="team-pct away-pct">{awayLabel} - {formatWinPct(awayWinPct)}</span>
 		</div>
 		<div class="split-gap"></div>
 		<div class="value-segment home" style:flex-grow={split.home}>
-			<span class="pct home-pct">{formatWinPct(homeWinPct)}</span>
+			<span class="team-pct home-pct">{formatWinPct(homeWinPct)} - {homeLabel}</span>
 		</div>
 	</div>
 
-	<div class="win-pct-track" aria-hidden="true">
-		<div
-			class="segment away"
-			style:flex-grow={split.away}
-			style:background={awayGradient}
-		></div>
-		<div class="divider"></div>
-		<div
-			class="segment home"
-			style:flex-grow={split.home}
-			style:background={homeGradient}
-		></div>
+	<div class="win-pct-track-shell">
+		<div class="win-pct-track" class:has-pick={hasPick} aria-hidden="true">
+			<div
+				class="segment away"
+				class:picked={awayPicked}
+				class:jets-light={awayTeamCode === 'NYJ'}
+				style:flex-grow={split.away}
+				style:background={awayGradient}
+			></div>
+			{#if !hasPick}
+				<div class="divider"></div>
+			{/if}
+			<div
+				class="segment home"
+				class:picked={homePicked}
+				class:jets-light={homeTeamCode === 'NYJ'}
+				style:flex-grow={split.home}
+				style:background={homeGradient}
+			></div>
+		</div>
 	</div>
 
 	<p class="win-pct-label">Win %</p>
@@ -99,12 +126,13 @@
 		width: 4px;
 	}
 
-	.pct {
+	.team-pct {
 		font-size: 0.78rem;
 		font-weight: 600;
 		font-variant-numeric: tabular-nums;
 		color: var(--text-muted);
 		line-height: 1;
+		white-space: nowrap;
 	}
 
 	.away-pct {
@@ -115,15 +143,21 @@
 		padding-left: 0.5rem;
 	}
 
+	.win-pct-track-shell {
+		position: relative;
+		padding: 0.2rem 0;
+		overflow: visible;
+	}
+
 	.win-pct-track {
 		display: flex;
 		align-items: stretch;
 		height: 1.1rem;
 		border: 1px solid var(--border);
 		border-radius: 999px;
-		overflow: hidden;
 		background: var(--bg);
 		box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.18);
+		overflow: visible;
 	}
 
 	.segment {
@@ -133,10 +167,31 @@
 		transition: flex-grow 0.2s ease;
 	}
 
+	.segment.away {
+		border-radius: 999px 0 0 999px;
+	}
+
+	.segment.home {
+		border-radius: 0 999px 999px 0;
+	}
+
+	.win-pct-track.has-pick .segment.picked {
+		height: 1.75rem;
+		align-self: center;
+		z-index: 1;
+	}
+
 	.divider {
 		flex-shrink: 0;
 		width: 4px;
+		align-self: center;
+		height: calc(1.1rem + 0.5rem);
+		margin-block: -0.25rem;
 		background: var(--shadow-color);
-		z-index: 1;
+		z-index: 2;
+	}
+
+	:global([data-theme='light']) .segment.jets-light {
+		box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.18);
 	}
 </style>
